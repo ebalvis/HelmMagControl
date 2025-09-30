@@ -1,5 +1,5 @@
 # HelmMagControl
-Este proyecto Delphi, llamado **BHC2000**, es una aplicación de escritorio diseñada para controlar tres fuentes de alimentación de la marca Wanptek a través del protocolo **Modbus RTU**. El objetivo principal del proyecto es generar un campo magnético controlado en tres ejes (X, Y, Z) mediante bobinas de Helmholtz, donde cada eje es alimentado por una fuente de alimentación independiente.
+**BHC2000**, es una aplicación de escritorio diseñada para controlar tres fuentes de alimentación de la marca Wanptek a través del protocolo **Modbus RTU**. El objetivo principal del proyecto es generar un campo magnético controlado en tres ejes (X, Y, Z) mediante bobinas de Helmholtz, donde cada eje es alimentado por una fuente de alimentación independiente.
 
 A continuación se detalla la funcionalidad externa del proyecto, describiendo lo que un usuario puede hacer con la aplicación.
 
