@@ -2,7 +2,9 @@ object fMain: TfMain
   Left = 0
   Top = 0
   BorderStyle = bsDialog
-  Caption = 'BHC2000 - Escola de Ingienier'#237'a Aeron'#225'utica y del Espacio'
+  Caption = 
+    'BHC2000 - School of Aeronautical and Space Engineering of the Un' +
+    'iversity of Vigo'
   ClientHeight = 898
   ClientWidth = 705
   Color = clBtnFace
@@ -40,8 +42,7 @@ object fMain: TfMain
     Align = alLeft
     BorderStyle = bsNone
     TabOrder = 1
-    ExplicitLeft = -2
-    ExplicitTop = 8
+    ExplicitHeight = 871
   end
   object Panel1: TPanel
     Left = 482

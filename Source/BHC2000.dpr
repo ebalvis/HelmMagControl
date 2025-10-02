@@ -8,9 +8,9 @@ uses
   madListModules,
   Vcl.Forms,
   uMain in 'uMain.pas' {fMain},
-  ModbusSerialThread in 'ModbusSerialThread.pas',
   uWanptekDisplay in 'uWanptekDisplay.pas' {fWanptekDisplay},
-  uTcpServerController in 'uTcpServerController.pas';
+  uTcpServerController in 'uTcpServerController.pas',
+  ModbusSerialThread in 'ModbusSerialThread.pas';
 
 {$R *.res}
 

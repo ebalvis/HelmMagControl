@@ -4,7 +4,7 @@
         <ProjectVersion>20.3</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">BHC2000</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
@@ -131,6 +131,10 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
+        <DCC_Define>madExcept;$(DCC_Define)</DCC_Define>
+        <DCC_MapFile>3</DCC_MapFile>
+        <DCC_DebugInformation>2</DCC_DebugInformation>
+        <DCC_LocalDebugSymbols>true</DCC_LocalDebugSymbols>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
@@ -143,12 +147,12 @@
             <Form>fMain</Form>
             <FormType>dfm</FormType>
         </DCCReference>
-        <DCCReference Include="ModbusSerialThread.pas"/>
         <DCCReference Include="uWanptekDisplay.pas">
             <Form>fWanptekDisplay</Form>
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="uTcpServerController.pas"/>
+        <DCCReference Include="ModbusSerialThread.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -171,6 +175,12 @@
                 </Source>
             </Delphi.Personality>
             <Deployment Version="5">
+                <DeployFile LocalName="..\Output\Win32\Release\BHC2000.exe" Configuration="Release" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>BHC2000.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployFile LocalName="Win32\Debug\BHC2000.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>BHC2000.exe</RemoteName>

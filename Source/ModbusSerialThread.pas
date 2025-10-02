@@ -12,12 +12,12 @@ type
 
   // Configuración del puerto serie
   TSerialConfig = record
-    Port: string; // 'COM1', 'COM2', etc.
-    BaudRate: DWORD; // 9600, 19200, 38400, etc.
-    DataBits: Byte; // 7, 8
-    StopBits: Byte; // 1, 2
-    Parity: Char; // 'N', 'E', 'O'
-    Timeout: DWORD; // Timeout en ms
+    Port: string;
+    BaudRate: DWORD;
+    DataBits: Byte;
+    StopBits: Byte;
+    Parity: Char;
+    Timeout: DWORD;
   end;
 
   // Estructura para comandos de escritura asíncrona
@@ -26,9 +26,9 @@ type
     SlaveID: Byte;
     Address: Word;
     Value: Word;
-    Values: TArray<Word>; // Para escrituras múltiples
-    BitValue: Boolean; // Para coils
-    BitValues: TArray<Boolean>; // Para múltiples coils
+    Values: TArray<Word>;
+    BitValue: Boolean;
+    BitValues: TArray<Boolean>;
   end;
 
   // Estructura para datos leídos
@@ -43,7 +43,7 @@ type
     Timestamp: TDateTime;
   end;
 
-  // Eventos para notificar datos
+  // Eventos
   TModbusDataEvent = procedure(Sender: TObject; const Data: TModbusReadData) of object;
   TModbusErrorEvent = procedure(Sender: TObject; const ErrorMsg: string) of object;
 
@@ -59,18 +59,18 @@ type
     FConnected: Boolean;
     FStopEvent: TEvent;
 
-    // Cola para comandos de escritura asíncrona
     FWriteQueue: TQueue<TModbusWriteCommand>;
     FWriteQueueLock: TCriticalSection;
 
-    // Eventos
     FOnDataReceived: TModbusDataEvent;
     FOnError: TModbusErrorEvent;
     FOnConnected: TNotifyEvent;
     FOnDisconnected: TNotifyEvent;
-    fProcessTime: Cardinal;
+    FProcessTime: Cardinal;
 
-    // Métodos internos
+    // MEJORA: Buffer de lectura reutilizable
+    FReadBuffer: array [0 .. 511] of Byte;
+
     function OpenSerialPort: Boolean;
     procedure CloseSerialPort;
     function ConfigureSerialPort: Boolean;
@@ -81,20 +81,23 @@ type
     function CalculateCRC(const Data: TBytes): Word;
     procedure ProcessWriteQueue;
     function WriteToSerial(const Data: TBytes): Boolean;
-    function ReadFromSerial(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
+    // MEJORA: Nueva función optimizada
+    function ReadFromSerialOptimized(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
     procedure FlushSerialBuffers;
+    // MEJORA: Calcular tiempo entre caracteres
+    function CalculateCharTime: Cardinal;
 
-    // Métodos para sincronización con el hilo principal
     procedure SyncDataReceived;
     procedure SyncError;
     procedure SyncConnected;
     procedure SyncDisconnected;
-    function getQueueEmpty: Boolean;
+    function GetQueueEmpty: Boolean;
 
   var
     FLastReadData: TModbusReadData;
     FLastErrorMsg: string;
     FidxSlave: Integer;
+
   protected
     procedure Execute; override;
 
@@ -102,25 +105,22 @@ type
     constructor Create(const SerialConfig: TSerialConfig; SlaveIDs: TBytes; ReadCommand: TModbusCommand; ReadInterval: Cardinal);
     destructor Destroy; override;
 
-    // Métodos públicos
     procedure Stop;
     procedure AddWriteCommand(Command: TModbusCommand; SlaveID: Byte; Address: Word; Value: Word); overload;
     procedure AddWriteCommand(Command: TModbusCommand; SlaveID: Byte; Address: Word; BitValue: Boolean); overload;
     procedure AddWriteCommand(Command: TModbusCommand; SlaveID: Byte; Address: Word; const Values: TArray<Word>); overload;
     procedure AddWriteCommand(Command: TModbusCommand; SlaveID: Byte; Address: Word; const BitValues: TArray<Boolean>); overload;
 
-    // Propiedades
     property Connected: Boolean read FConnected;
     property ReadInterval: Cardinal read FReadInterval write FReadInterval;
     property SerialConfig: TSerialConfig read FSerialConfig write FSerialConfig;
-    property ProcessTime: Cardinal read fProcessTime write fProcessTime;
-    property QueueEmpty: Boolean read getQueueEmpty;
-    // Eventos
+    property ProcessTime: Cardinal read FProcessTime write FProcessTime;
+    property QueueEmpty: Boolean read GetQueueEmpty;
+
     property OnDataReceived: TModbusDataEvent read FOnDataReceived write FOnDataReceived;
     property OnError: TModbusErrorEvent read FOnError write FOnError;
     property OnConnected: TNotifyEvent read FOnConnected write FOnConnected;
     property OnDisconnected: TNotifyEvent read FOnDisconnected write FOnDisconnected;
-
   end;
 
 implementation
@@ -162,29 +162,57 @@ begin
   WaitFor;
 end;
 
+// MEJORA: Calcular tiempo entre caracteres basado en baudrate
+function TModbusSerialThread.CalculateCharTime: Cardinal;
+var
+  BitsPerChar: Integer;
+  CharsPerSecond: Double;
+  TimePerChar: Double;
+begin
+  // Bits por carácter = data bits + start bit + stop bits + parity bit (si existe)
+  BitsPerChar := FSerialConfig.DataBits + 1 + FSerialConfig.StopBits;
+  if FSerialConfig.Parity <> 'N' then
+    Inc(BitsPerChar);
+
+  CharsPerSecond := FSerialConfig.BaudRate / BitsPerChar;
+  TimePerChar := 1000.0 / CharsPerSecond; // en milisegundos
+
+  // Tiempo de 3.5 caracteres (estándar Modbus RTU)
+  Result := Round(TimePerChar * 3.5);
+
+  // Mínimo 2ms, máximo 20ms
+  if Result < 2 then
+    Result := 2
+  else if Result > 20 then
+    Result := 20;
+end;
+
 procedure TModbusSerialThread.Execute;
 var
   LastReadTime: Cardinal;
   ReadData: TModbusReadData;
   aux: Integer;
+
   procedure NextEquipo;
   begin
     repeat
-      FidxSlave := (FidxSlave + 1) mod 3;
-    until FSlaveIDs[FidxSlave] <> 0;
+      FidxSlave := (FidxSlave + 1) mod Length(FSlaveIDs);
+    until (FSlaveIDs[FidxSlave] <> 0) or (FidxSlave = 0);
   end;
 
 begin
   LastReadTime := 0;
   FidxSlave := 0;
   aux := 0;
-  for var i := 0 to length(FSlaveIDs) - 1 do
+
+  for var i := 0 to Length(FSlaveIDs) - 1 do
     aux := aux + FSlaveIDs[i];
+
   if aux = 0 then
     raise Exception.Create('No hay direcciones modbus definidas.');
+
   while not Terminated do
   begin
-    // Intentar abrir puerto serie si no está conectado
     if not FConnected then
     begin
       if OpenSerialPort and ConfigureSerialPort then
@@ -195,7 +223,6 @@ begin
       end
       else
       begin
-        // Esperar antes de reintentar conexión
         if FStopEvent.WaitFor(2000) = wrSignaled then
           Break;
         Continue;
@@ -203,16 +230,15 @@ begin
     end;
 
     try
-      // Procesar cola de escrituras asíncronas
       ProcessWriteQueue;
 
-      // Realizar lectura periódica
       if (GetTickCount - LastReadTime) >= FReadInterval then
       begin
         NextEquipo;
-        fProcessTime := GetTickCount;
+        FProcessTime := GetTickCount;
         ReadData := SendModbusCommand(FReadCommand, FSlaveIDs[FidxSlave], FStartAddress, FRegisterCount);
-        fProcessTime := GetTickCount - fProcessTime;
+        FProcessTime := GetTickCount - FProcessTime;
+
         if ReadData.Success then
         begin
           FLastReadData := ReadData;
@@ -227,8 +253,8 @@ begin
         LastReadTime := GetTickCount;
       end;
 
-      // Pequeña pausa para no saturar la CPU ni el puerto
-      if FStopEvent.WaitFor(10) = wrSignaled then
+      // MEJORA: Pausa más corta
+      if FStopEvent.WaitFor(5) = wrSignaled then
         Break;
 
     except
@@ -241,7 +267,6 @@ begin
         FLastErrorMsg := 'Excepción en hilo Modbus: ' + E.Message;
         Synchronize(SyncError);
 
-        // Pausa antes de reintentar
         if FStopEvent.WaitFor(2000) = wrSignaled then
           Break;
       end;
@@ -301,7 +326,6 @@ begin
     Exit;
 
   try
-    // Configurar DCB (Device Control Block)
     FillChar(DCB, SizeOf(DCB), 0);
     DCB.DCBlength := SizeOf(DCB);
 
@@ -311,7 +335,6 @@ begin
     DCB.BaudRate := FSerialConfig.BaudRate;
     DCB.ByteSize := FSerialConfig.DataBits;
 
-    // Configurar bits de parada
     case FSerialConfig.StopBits of
       1:
         DCB.StopBits := ONESTOPBIT;
@@ -319,7 +342,6 @@ begin
         DCB.StopBits := TWOSTOPBITS;
     end;
 
-    // Configurar paridad
     case FSerialConfig.Parity of
       'N':
         DCB.Parity := NOPARITY;
@@ -329,7 +351,6 @@ begin
         DCB.Parity := ODDPARITY;
     end;
 
-    // Configuraciones para Modbus RTU
     DCB.Flags := 0;
     DCB.Flags := DCB.Flags or $01; // fBinary
     if DCB.Parity <> NOPARITY then
@@ -343,13 +364,20 @@ begin
     if not SetCommState(FSerialHandle, DCB) then
       Exit;
 
-    // Configurar timeouts
+    // MEJORA CRÍTICA: Timeouts optimizados para Modbus RTU
     FillChar(Timeouts, SizeOf(Timeouts), 0);
-    Timeouts.ReadIntervalTimeout := MAXDWORD;
-    Timeouts.ReadTotalTimeoutConstant := FSerialConfig.Timeout;
+
+    // ReadIntervalTimeout: tiempo máximo entre bytes
+    // Usar tiempo de 1.5 caracteres para detectar fin de trama rápidamente
+    Timeouts.ReadIntervalTimeout := Max(10, CalculateCharTime div 2);
+
+    // ReadTotalTimeoutMultiplier y Constant para timeout total
     Timeouts.ReadTotalTimeoutMultiplier := 0;
-    Timeouts.WriteTotalTimeoutConstant := FSerialConfig.Timeout;
+    Timeouts.ReadTotalTimeoutConstant := Max(100, FSerialConfig.Timeout);
+
+    // Timeouts de escritura más cortos
     Timeouts.WriteTotalTimeoutMultiplier := 0;
+    Timeouts.WriteTotalTimeoutConstant := 100;
 
     Result := SetCommTimeouts(FSerialHandle, Timeouts);
 
@@ -365,14 +393,17 @@ end;
 procedure TModbusSerialThread.FlushSerialBuffers;
 begin
   if FSerialHandle <> INVALID_HANDLE_VALUE then
-  begin
     PurgeComm(FSerialHandle, PURGE_RXCLEAR or PURGE_TXCLEAR);
-  end;
 end;
 
-function TModbusSerialThread.getQueueEmpty: Boolean;
+function TModbusSerialThread.GetQueueEmpty: Boolean;
 begin
-  Result := FWriteQueue.Count = 0;
+  FWriteQueueLock.Enter;
+  try
+    Result := FWriteQueue.Count = 0;
+  finally
+    FWriteQueueLock.Leave;
+  end;
 end;
 
 function TModbusSerialThread.WriteToSerial(const Data: TBytes): Boolean;
@@ -384,7 +415,7 @@ begin
     Exit;
 
   try
-    Result := WriteFile(FSerialHandle, Data[0], length(Data), BytesWritten, nil) and (BytesWritten = DWORD(length(Data)));
+    Result := WriteFile(FSerialHandle, Data[0], Length(Data), BytesWritten, nil) and (BytesWritten = DWORD(Length(Data)));
 
     if Result then
       FlushFileBuffers(FSerialHandle);
@@ -398,49 +429,60 @@ begin
   end;
 end;
 
-function TModbusSerialThread.ReadFromSerial(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
+// MEJORA CRÍTICA: Nueva función de lectura optimizada
+function TModbusSerialThread.ReadFromSerialOptimized(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
 var
   BytesRead, TotalRead: DWORD;
   StartTime: DWORD;
-  TempBuffer: array [0 .. 255] of Byte;
+  LastByteTime: DWORD;
+  InterCharTimeout: Cardinal;
 begin
   Result := False;
   TotalRead := 0;
   StartTime := GetTickCount;
+  LastByteTime := StartTime;
   SetLength(Buffer, 0);
 
   if FSerialHandle = INVALID_HANDLE_VALUE then
     Exit;
 
+  // Tiempo entre caracteres (1.5 caracteres según Modbus RTU)
+  InterCharTimeout := Max(5, CalculateCharTime div 2);
+
   try
+    // Leer hasta obtener la longitud esperada o timeout
     while (TotalRead < DWORD(ExpectedLength)) and ((GetTickCount - StartTime) < FSerialConfig.Timeout) do
     begin
       BytesRead := 0;
-      if ReadFile(FSerialHandle, TempBuffer[0], SizeOf(TempBuffer), BytesRead, nil) and (BytesRead > 0) then
-      begin
-        SetLength(Buffer, length(Buffer) + BytesRead);
-        Move(TempBuffer[0], Buffer[TotalRead], BytesRead);
-        TotalRead := TotalRead + BytesRead;
 
-        // Para Modbus RTU, si no hay más datos en un tiempo, asumir fin de trama
-        if ExpectedLength <= 0 then
-        begin
-          Sleep(10); // Esperar un poco más
-          if not ReadFile(FSerialHandle, TempBuffer[0], 1, BytesRead, nil) or (BytesRead = 0) then
-            Break
-          else
-          begin
-            SetLength(Buffer, length(Buffer) + 1);
-            Buffer[TotalRead] := TempBuffer[0];
-            TotalRead := TotalRead + 1;
-          end;
-        end;
+      // Leer lo que esté disponible
+      if ReadFile(FSerialHandle, FReadBuffer[TotalRead], SizeOf(FReadBuffer) - TotalRead, BytesRead, nil) and (BytesRead > 0) then
+      begin
+        TotalRead := TotalRead + BytesRead;
+        LastByteTime := GetTickCount;
+
+        // Si hemos leído suficiente, salir
+        if (ExpectedLength > 0) and (TotalRead >= DWORD(ExpectedLength)) then
+          Break;
       end
       else
+      begin
+        // Si no hay datos y ha pasado el tiempo entre caracteres,
+        // asumir fin de trama
+        if (TotalRead > 0) and ((GetTickCount - LastByteTime) >= InterCharTimeout) then
+          Break;
+
+        // Pequeña pausa para no saturar CPU
         Sleep(1);
+      end;
     end;
 
-    Result := TotalRead > 0;
+    if TotalRead > 0 then
+    begin
+      SetLength(Buffer, TotalRead);
+      Move(FReadBuffer[0], Buffer[0], TotalRead);
+      Result := True;
+    end;
 
   except
     on E: Exception do
@@ -456,6 +498,8 @@ var
   Frame: TBytes;
   Response: TBytes;
   ExpectedResponseLength: Integer;
+  InterFrameDelay: Cardinal;
+  CRCReceived, CRCCalculated: Word;
 begin
   FillChar(Result, SizeOf(Result), 0);
   Result.SlaveID := SlaveID;
@@ -464,24 +508,24 @@ begin
   Result.Timestamp := Now;
 
   try
-    // Limpiar buffers antes de enviar
+    // Limpiar buffers
     FlushSerialBuffers;
 
-    // Construir trama Modbus RTU
     Frame := BuildModbusFrame(Command, SlaveID, Address, Count);
 
-    // Calcular longitud esperada de respuesta
+    // Calcular longitud esperada
     case Command of
       mcReadHoldingRegisters, mcReadInputRegisters:
-        ExpectedResponseLength := 5 + (Count * 2); // SlaveID + Function + ByteCount + Data + CRC
+        ExpectedResponseLength := 5 + (Count * 2);
       mcReadCoils, mcReadDiscreteInputs:
-        ExpectedResponseLength := 5 + ((Count + 7) div 8); // SlaveID + Function + ByteCount + Data + CRC
+        ExpectedResponseLength := 5 + ((Count + 7) div 8);
     else
-      ExpectedResponseLength := 8; // Respuesta estándar
+      ExpectedResponseLength := 8;
     end;
 
-    // Esperar tiempo entre tramas (3.5 caracteres mínimo para Modbus RTU)
-    Sleep(4);
+    // MEJORA: Tiempo entre tramas basado en baudrate (3.5 caracteres)
+    InterFrameDelay := CalculateCharTime;
+    Sleep(InterFrameDelay);
 
     // Enviar comando
     if not WriteToSerial(Frame) then
@@ -490,29 +534,28 @@ begin
       Exit;
     end;
 
-    // Leer respuesta
-    if not ReadFromSerial(Response, ExpectedResponseLength) then
+    // MEJORA: Usar función de lectura optimizada
+    if not ReadFromSerialOptimized(Response, ExpectedResponseLength) then
     begin
       Result.ErrorMessage := 'Timeout esperando respuesta';
       Exit;
     end;
 
-    if length(Response) < 3 then
+    if Length(Response) < 3 then
     begin
       Result.ErrorMessage := 'Respuesta muy corta';
       Exit;
     end;
 
     // Verificar CRC
-    if length(Response) >= 2 then
+    if Length(Response) >= 2 then
     begin
-      var
-      CRCReceived := Response[length(Response) - 2] or (Response[length(Response) - 1] shl 8);
-      var
-      CRCCalculated := CalculateCRC(Copy(Response, 0, length(Response) - 2));
+      CRCReceived := Response[Length(Response) - 2] or (Response[Length(Response) - 1] shl 8);
+      CRCCalculated := CalculateCRC(Copy(Response, 0, Length(Response) - 2));
+
       if CRCReceived <> CRCCalculated then
       begin
-        Result.ErrorMessage := 'Error de CRC en respuesta';
+        Result.ErrorMessage := Format('Error de CRC (Calc: $%4.4x, Recv: $%4.4x)', [CRCCalculated, CRCReceived]);
         Exit;
       end;
     end;
@@ -539,6 +582,7 @@ var
   Response: TBytes;
   Values: TArray<Word>;
   i: Integer;
+  InterFrameDelay: Cardinal;
 begin
   Result := False;
   try
@@ -553,29 +597,28 @@ begin
 
       mcWriteMultipleCoils:
         begin
-          SetLength(Values, length(WriteCmd.BitValues));
+          SetLength(Values, Length(WriteCmd.BitValues));
           for i := 0 to High(WriteCmd.BitValues) do
             Values[i] := IfThen(WriteCmd.BitValues[i], 1, 0);
-          Frame := BuildModbusFrame(WriteCmd.Command, WriteCmd.SlaveID, WriteCmd.Address, length(WriteCmd.BitValues), Values);
+          Frame := BuildModbusFrame(WriteCmd.Command, WriteCmd.SlaveID, WriteCmd.Address, Length(WriteCmd.BitValues), Values);
         end;
 
       mcWriteMultipleRegisters:
-        Frame := BuildModbusFrame(WriteCmd.Command, WriteCmd.SlaveID, WriteCmd.Address, length(WriteCmd.Values), WriteCmd.Values);
+        Frame := BuildModbusFrame(WriteCmd.Command, WriteCmd.SlaveID, WriteCmd.Address, Length(WriteCmd.Values), WriteCmd.Values);
     end;
 
-    // Esperar tiempo entre tramas
-    Sleep(4);
+    // MEJORA: Usar tiempo calculado entre tramas
+    InterFrameDelay := CalculateCharTime;
+    Sleep(InterFrameDelay);
 
-    // Enviar comando
     if not WriteToSerial(Frame) then
       Exit;
 
-    // Leer respuesta de confirmación
-    if not ReadFromSerial(Response, 8) then
+    // MEJORA: Usar función optimizada
+    if not ReadFromSerialOptimized(Response, 8) then
       Exit;
 
-    // Verificar que no sea una respuesta de error
-    if (length(Response) >= 2) and ((Response[1] and $80) = 0) then
+    if (Length(Response) >= 2) and ((Response[1] and $80) = 0) then
       Result := True;
 
   except
@@ -592,7 +635,7 @@ var
   Frame: TBytes;
   Len: Integer;
   CRC: Word;
-  i, ByteCount: Integer;
+  i, j, ByteCount: Integer;
 begin
   case Command of
     mcReadCoils:
@@ -663,7 +706,7 @@ begin
 
     mcWriteMultipleRegisters:
       begin
-        ByteCount := length(Values) * 2;
+        ByteCount := Length(Values) * 2;
         SetLength(Frame, 9 + ByteCount);
         Frame[0] := SlaveID;
         Frame[1] := $10;
@@ -692,15 +735,12 @@ begin
         Frame[5] := Lo(CountOrValue);
         Frame[6] := ByteCount;
 
-        // Convertir bits a bytes
         for i := 0 to ByteCount - 1 do
         begin
           Frame[7 + i] := 0;
-          var
-            j: Integer;
           for j := 0 to 7 do
           begin
-            if (i * 8 + j) < length(Values) then
+            if (i * 8 + j) < Length(Values) then
               if Values[i * 8 + j] <> 0 then
                 Frame[7 + i] := Frame[7 + i] or (1 shl j);
           end;
@@ -709,8 +749,7 @@ begin
   end;
 
   // Calcular y agregar CRC
-  Len := length(Frame);
-  // SetLength(Frame, Len + 2);
+  Len := Length(Frame);
   CRC := CalculateCRC(Copy(Frame, 0, Len - 2));
   Frame[Len - 2] := Lo(CRC);
   Frame[Len - 1] := Hi(CRC);
@@ -724,13 +763,12 @@ var
 begin
   FillChar(Result, SizeOf(Result), 0);
 
-  if length(Response) < 3 then
+  if Length(Response) < 3 then
   begin
     Result.ErrorMessage := 'Respuesta muy corta';
     Exit;
   end;
 
-  // Verificar función de respuesta
   if (Response[1] and $80) = $80 then
   begin
     Result.ErrorMessage := 'Error Modbus código: ' + IntToStr(Response[2]);
@@ -740,7 +778,7 @@ begin
   case Command of
     mcReadHoldingRegisters, mcReadInputRegisters:
       begin
-        if length(Response) < 5 then
+        if Length(Response) < 5 then
         begin
           Result.ErrorMessage := 'Respuesta incompleta para registros';
           Exit;
@@ -749,14 +787,12 @@ begin
         ByteCount := Response[2];
         SetLength(Result.Values, ByteCount div 2);
         for i := 0 to High(Result.Values) do
-        begin
           Result.Values[i] := (Response[3 + i * 2] shl 8) or Response[4 + i * 2];
-        end;
       end;
 
     mcReadCoils, mcReadDiscreteInputs:
       begin
-        if length(Response) < 4 then
+        if Length(Response) < 4 then
         begin
           Result.ErrorMessage := 'Respuesta incompleta para coils';
           Exit;
@@ -765,9 +801,7 @@ begin
         ByteCount := Response[2];
         SetLength(Result.BitValues, Result.Count);
         for i := 0 to Result.Count - 1 do
-        begin
           Result.BitValues[i] := (Response[3 + (i div 8)] and (1 shl (i mod 8))) <> 0;
-        end;
       end;
   end;
 
@@ -806,8 +840,8 @@ begin
       FWriteQueueLock.Leave;
       try
         WriteModbusCommand(WriteCmd);
-        // Pequeña pausa entre comandos de escritura
-        Sleep(10);
+        // MEJORA: Pausa más corta
+        Sleep(5);
       finally
         FWriteQueueLock.Enter;
       end;

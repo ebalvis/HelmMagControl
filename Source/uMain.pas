@@ -147,6 +147,7 @@ begin
     fWanptekDisplays[i].Enabled := False;
     fWanptekDisplays[i].Show;
   end;
+  self.Height:=3*fWanptekDisplays[0].Height+statusbar1.Height+60;
   FBackend := TBackendWanptek.Create;
   fServer := TTcpServerController.Create;
   fServer.SetBackend(FBackend);
