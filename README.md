@@ -20,6 +20,7 @@ La aplicación presenta una interfaz gráfica de usuario (GUI) que centraliza el
     * **Control de Salida**: Un interruptor **(On/Off)** permite habilitar o deshabilitar la salida de cada fuente de forma individual.
     * **Protección contra Sobrecorriente (OCP)**: Se incluye un interruptor para activar o desactivar la función OCP.
     * **Indicadores de Estado**: LEDs en la interfaz indican el estado de la fuente, como el modo de operación (**CV - Voltaje Constante** o **CC - Corriente Constante**), si la salida está activa (**Power**) o si se ha activado la protección OCP.
+<img width="705" height="741" alt="gui" src="https://github.com/user-attachments/assets/538794dc-a9fe-423e-9381-89c8bfad3ff2" />
 
 ### **Comunicación**
 
@@ -40,3 +41,4 @@ Una de las características más avanzadas del proyecto es su capacidad de ser c
     * `STATUS <n>`: Consulta el estado de un canal.
 
 En resumen, el proyecto **BHC2000** es una herramienta completa y robusta que permite tanto el control manual detallado como la automatización remota de tres fuentes de alimentación para la generación precisa de campos magnéticos, lo que lo hace ideal para entornos de laboratorio e investigación.
+
