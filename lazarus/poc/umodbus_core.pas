@@ -6,18 +6,18 @@ unit umodbus_core;
 interface
 
 type
-  TByteArray = array of Byte;
-  TWordArray = array of Word;
+  TMbBytes = array of Byte;
+  TMbWords = array of Word;
 
-function ModbusCRC(const Data: TByteArray): Word;
-function BuildReadHolding(SlaveID: Byte; Addr, Count: Word): TByteArray;
-function BuildWriteMultiple(SlaveID: Byte; Addr: Word; const Values: array of Word): TByteArray;
-function ParseRegisters(const Resp: TByteArray; out Values: TWordArray): Boolean;
+function ModbusCRC(const Data: TMbBytes): Word;
+function BuildReadHolding(SlaveID: Byte; Addr, Count: Word): TMbBytes;
+function BuildWriteMultiple(SlaveID: Byte; Addr: Word; const Values: array of Word): TMbBytes;
+function ParseRegisters(const Resp: TMbBytes; out Values: TMbWords): Boolean;
 function SelfTestModbus: Boolean;
 
 implementation
 
-function ModbusCRC(const Data: TByteArray): Word;
+function ModbusCRC(const Data: TMbBytes): Word;
 var
   crc: Word;
   i, j: Integer;
@@ -35,7 +35,7 @@ begin
   Result := crc;
 end;
 
-function BuildReadHolding(SlaveID: Byte; Addr, Count: Word): TByteArray;
+function BuildReadHolding(SlaveID: Byte; Addr, Count: Word): TMbBytes;
 var
   crc: Word;
 begin
@@ -51,7 +51,7 @@ begin
   Result[7] := Hi(crc);
 end;
 
-function BuildWriteMultiple(SlaveID: Byte; Addr: Word; const Values: array of Word): TByteArray;
+function BuildWriteMultiple(SlaveID: Byte; Addr: Word; const Values: array of Word): TMbBytes;
 var
   crc: Word;
   bc, i: Integer;
@@ -75,7 +75,7 @@ begin
   Result[8 + bc] := Hi(crc);
 end;
 
-function ParseRegisters(const Resp: TByteArray; out Values: TWordArray): Boolean;
+function ParseRegisters(const Resp: TMbBytes; out Values: TMbWords): Boolean;
 var
   bc, i: Integer;
 begin
@@ -96,8 +96,8 @@ end;
 
 function SelfTestModbus: Boolean;
 var
-  f: TByteArray;
-  v: TWordArray;
+  f: TMbBytes;
+  v: TMbWords;
   crc: Word;
 begin
   // 1) Trama de lectura: CRC coherente con el cuerpo
