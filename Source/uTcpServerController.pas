@@ -35,6 +35,7 @@ type
     IdTCPServer: TIdTCPServer;
   private
     FBackend: IPowerSupplyBackend;
+    FFS: TFormatSettings; // separador decimal invariante ('.') para el protocolo
     function ParseAndExecute(const Cmd: string): string;
     function HandleSetVoltage(const M: TMatch): string;
     function HandleSetCurrent(const M: TMatch): string;
@@ -51,7 +52,7 @@ type
     procedure SetBackend(const ABackend: IPowerSupplyBackend);
     procedure IdTCPServerExecute(AContext: TIdContext);
     Constructor Create;
-    Destructor Destroy;
+    Destructor Destroy; override;
   end;
 
 implementation
@@ -60,6 +61,7 @@ implementation
 constructor TTcpServerController.Create;
 begin
   inherited Create;
+  FFS := TFormatSettings.Invariant;
   IdTCPServer := TIdTCPServer.Create(nil);
 
   // ENLAZAR EVENTOS ANTES DE ACTIVAR
@@ -96,7 +98,7 @@ end;
 
 procedure TTcpServerController.IdTCPServerConnect(AContext: TIdContext);
 begin
-  // Establece UTF-8 como codificación por defecto
+  // Establece UTF-8 como codificaciï¿½n por defecto
   AContext.Connection.IOHandler.DefStringEncoding := IndyTextEncoding_UTF8();
   // AContext.Connection.IOHandler.def.DefAnsiEncoding := IndyTextEncoding_UTF8();
 end;
@@ -193,14 +195,9 @@ begin
   if not Assigned(FBackend) then
     Exit('ERROR NoBackend');
   ch := EnsureChannel(M.Groups[1].Value, FBackend.ChannelCount);
-  var
-  FS := TFormatSettings.Create;
-  FS.DecimalSeparator := '.';
-  val := StrToFloat(M.Groups[2].Value, FS);
-
-  // TODO: si tu backend requiere sincronización con GUI, usa TThread.Queue
+  val := StrToFloat(M.Groups[2].Value, FFS);
   FBackend.SetVoltage(ch-1, val);
-  Result := Format('OK SET V%d=%.6f', [ch, val]);
+  Result := Format('OK SET V%d=%.6f', [ch, val], FFS);
 end;
 
 function TTcpServerController.HandleSetCurrent(const M: TMatch): string;
@@ -211,12 +208,9 @@ begin
   if not Assigned(FBackend) then
     Exit('ERROR NoBackend');
   ch := EnsureChannel(M.Groups[1].Value, FBackend.ChannelCount);
-  var
-  FS := TFormatSettings.Create;
-  FS.DecimalSeparator := '.';
-  val := StrToFloat(M.Groups[2].Value, FS);
+  val := StrToFloat(M.Groups[2].Value, FFS);
   FBackend.SetCurrent(ch-1, val);
-  Result := Format('OK SET I%d=%.6f', [ch, val]);
+  Result := Format('OK SET I%d=%.6f', [ch, val], FFS);
 end;
 
 function TTcpServerController.HandleOutput(const M: TMatch): string;
@@ -241,7 +235,7 @@ begin
     Exit('ERROR NoBackend');
   ch := EnsureChannel(M.Groups[1].Value, FBackend.ChannelCount);
   v := FBackend.GetVoltage(ch-1);
-  Result := Format('OK V%d=%.6f', [ch, v]);
+  Result := Format('OK V%d=%.6f', [ch, v], FFS);
 end;
 
 function TTcpServerController.HandleGetCurrent(const M: TMatch): string;
@@ -253,21 +247,19 @@ begin
     Exit('ERROR NoBackend');
   ch := EnsureChannel(M.Groups[1].Value, FBackend.ChannelCount);
   i := FBackend.GetCurrent(ch-1);
-  Result := Format('OK I%d=%.6f', [ch, i]);
+  Result := Format('OK I%d=%.6f', [ch, i], FFS);
 end;
 
 function TTcpServerController.HandleGetPower(const M: TMatch): string;
 var
   ch: Integer;
-  v, i, p: Double;
+  p: Double;
 begin
   if not Assigned(FBackend) then
     Exit('ERROR NoBackend');
   ch := EnsureChannel(M.Groups[1].Value, FBackend.ChannelCount);
-  v := FBackend.GetVoltage(ch-1);
-  i := FBackend.GetCurrent(ch-1);
   p := FBackend.GetPower(ch-1);
-  Result := Format('OK P%d=%.6f', [ch, p]);
+  Result := Format('OK P%d=%.6f', [ch, p], FFS);
 end;
 
 function TTcpServerController.HandleStatus(const M: TMatch): string;
@@ -295,7 +287,7 @@ begin
   n := FBackend.ChannelCount;
   SetLength(parts, n);
   for ch := 0 to n-1 do
-    parts[ch] := Format('CH%d V=%.6f I=%.6f OUT=%s', [ch, FBackend.GetVoltage(ch), FBackend.GetCurrent(ch), IfThen(FBackend.GetOutput(ch), 'ON', 'OFF')]);
+    parts[ch] := Format('CH%d V=%.6f I=%.6f OUT=%s', [ch + 1, FBackend.GetVoltage(ch), FBackend.GetCurrent(ch), IfThen(FBackend.GetOutput(ch), 'ON', 'OFF')], FFS);
   Result := 'OK ' + string.Join(' | ', parts);
 end;
 

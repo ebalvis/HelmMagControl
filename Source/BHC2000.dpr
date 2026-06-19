@@ -7,6 +7,7 @@ uses
   madListProcesses,
   madListModules,
   Vcl.Forms,
+  uLang in 'uLang.pas',
   uMain in 'uMain.pas' {fMain},
   uWanptekDisplay in 'uWanptekDisplay.pas' {fWanptekDisplay},
   uTcpServerController in 'uTcpServerController.pas',

@@ -6,7 +6,7 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, ModbusSerialThread, Vcl.ComCtrls, JvAppStorage, JvAppRegistryStorage, JvComponentBase, JvFormPlacement,
   JvExControls, JvSegmentedLEDDisplay, Vcl.ExtCtrls, uWanptekDisplay, System.ImageList, Vcl.ImgList, System.Actions, Vcl.ActnList, IdBaseComponent, IdComponent,
-  IdCustomTCPServer, IdTCPServer, uTcpServerController;
+  IdCustomTCPServer, IdTCPServer, uTcpServerController, uLang;
 
 type
   TBackendWanptek = class(TInterfacedObject, IPowerSupplyBackend)
@@ -75,7 +75,13 @@ type
     FModbusThread: TModbusSerialThread;
     FConnected: Boolean;
     fWanptekDisplays: array [0 .. 2] of TfWanptekDisplay;
+    pnlLang: TPanel;
+    lblLang: TLabel;
+    cmbLang: TComboBox;
+    lblMs: TLabel;
     function GetSerialConfig: TSerialConfig;
+    procedure ApplyLanguage;
+    procedure cmbLangChange(Sender: TObject);
     // Eventos del hilo Modbus
     procedure OnModbusDataReceived(Sender: TObject; const Data: TModbusReadData);
     procedure OnModbusError(Sender: TObject; const ErrorMsg: string);
@@ -88,16 +94,67 @@ type
 var
   fMain: TfMain;
 
-const
-  Titles: array [0 .. 2] of string = ('BOBINA EJE X', 'BOBINA EJE Y', 'BOBINA EJE Z');
-
 implementation
 
 {$R *.dfm}
 
 procedure TfMain.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  fServer.Stop;
+  // Detener primero el servidor TCP: corta las llamadas entrantes al backend
+  // antes de que se liberen los formularios de canal.
+  if Assigned(fServer) then
+    fServer.Stop;
+  // Detener y liberar el hilo Modbus (tiene Synchronize sobre estos formularios).
+  if Assigned(FModbusThread) then
+  begin
+    FModbusThread.Stop;
+    FreeAndNil(FModbusThread);
+  end;
+  FreeAndNil(fServer);
+end;
+
+procedure TfMain.ApplyLanguage;
+begin
+  Caption := Tr(siAppTitle);
+  GroupBox1.Caption := Tr(siGbSerial);
+  Label1.Caption := Tr(siLblPuerto);
+  Label2.Caption := Tr(siLblBaudios);
+  Label3.Caption := Tr(siLblDataBits);
+  Label4.Caption := Tr(siLblParidad);
+  Label5.Caption := Tr(siLblStopBits);
+  GroupBox2.Caption := Tr(siGbDirecciones);
+  Label8.Caption := Tr(siLblEjeX);
+  Label6.Caption := Tr(siLblEjeY);
+  Label7.Caption := Tr(siLblEjeZ);
+  GroupBox3.Caption := Tr(siGbPuertoServidor);
+  Label9.Caption := Tr(siLblPuertoSrv);
+  GroupBox4.Caption := Tr(siGbParametros);
+  Label10.Caption := Tr(siLblIntervalo);
+  if Assigned(lblLang) then
+    lblLang.Caption := Tr(siLblIdioma);
+
+  // Caption de la accion y mensaje de estado segun el estado de conexion.
+  if actConectar.Tag = 1 then
+  begin
+    actConectar.Caption := Tr(siDesconectar);
+    StatusBar1.Panels[1].Text := Tr(siConectado);
+  end
+  else
+  begin
+    actConectar.Caption := Tr(siConectar);
+    StatusBar1.Panels[1].Text := Tr(siDesconectado);
+  end;
+
+  for var i := 0 to 2 do
+    if Assigned(fWanptekDisplays[i]) then
+      fWanptekDisplays[i].ApplyLanguage;
+end;
+
+procedure TfMain.cmbLangChange(Sender: TObject);
+begin
+  SetLanguage(TLanguage(cmbLang.ItemIndex));
+  JvAppRegistryStorage1.WriteInteger('Settings\Language', Ord(CurrentLanguage));
+  ApplyLanguage;
 end;
 
 procedure TfMain.FormCreate(Sender: TObject);
@@ -133,6 +190,42 @@ begin
   cmbStopBit.Items.Add('2');
   cmbStopBit.ItemIndex := 0;
   JvFormStorage1.RestoreFormPlacement;
+
+  // Idioma: leer el guardado o, en su defecto, detectar el de Windows.
+  SetLanguage(TLanguage(JvAppRegistryStorage1.ReadInteger('Settings\Language', Ord(DetectDefaultLanguage))));
+
+  // Selector de idioma (desplegable), en una franja superior de Panel1.
+  pnlLang := TPanel.Create(Self);
+  pnlLang.Parent := Panel1;
+  pnlLang.Top := 0; // alTop: queda encima del boton Conectar
+  pnlLang.Align := alTop;
+  pnlLang.Height := 29;
+  pnlLang.BevelOuter := bvNone;
+
+  lblLang := TLabel.Create(Self);
+  lblLang.Parent := pnlLang;
+  lblLang.AutoSize := True;
+  lblLang.Left := 8;
+  lblLang.Top := 7;
+
+  cmbLang := TComboBox.Create(Self);
+  cmbLang.Parent := pnlLang;
+  cmbLang.Style := csDropDownList;
+  cmbLang.Left := 99;
+  cmbLang.Top := 3;
+  cmbLang.Width := 112;
+  cmbLang.Items.Add(LanguageName(lnEs));
+  cmbLang.Items.Add(LanguageName(lnEn));
+  cmbLang.ItemIndex := Ord(CurrentLanguage); // antes de asignar OnChange para no dispararlo
+  cmbLang.OnChange := cmbLangChange;
+
+  // Unidad del intervalo (ms), a la derecha del campo. No se traduce.
+  lblMs := TLabel.Create(Self);
+  lblMs.Parent := GroupBox4;
+  lblMs.Left := edtRefresco.Left + edtRefresco.Width + 6;
+  lblMs.Top := edtRefresco.Top + 3;
+  lblMs.Caption := 'ms';
+
   setLength(SlaveIDs, 3);
   SlaveIDs[0] := StrToIntDef(edtEjeX.Text, 1);
   SlaveIDs[1] := StrToIntDef(edtEjeY.Text, 1);
@@ -140,7 +233,7 @@ begin
   ReadInterval := StrToIntDef(edtRefresco.Text, 1000);
   for var i := 0 to 2 do
   begin
-    fWanptekDisplays[i] := TfWanptekDisplay.execute(SlaveIDs[i], Titles[i]);
+    fWanptekDisplays[i] := TfWanptekDisplay.execute(SlaveIDs[i], i);
     fWanptekDisplays[i].BorderStyle := bsNone; // muy importante
     fWanptekDisplays[i].Parent := ScrollBox1;
     fWanptekDisplays[i].Align := alTop; // evita que se expanda solo
@@ -151,6 +244,7 @@ begin
   FBackend := TBackendWanptek.Create;
   fServer := TTcpServerController.Create;
   fServer.SetBackend(FBackend);
+  ApplyLanguage;
 end;
 
 function TfMain.GetSerialConfig: TSerialConfig;
@@ -184,7 +278,7 @@ begin
 
     if Assigned(FModbusThread) then
     begin
-      StatusBar1.Panels[1].Text := 'Deteniendo hilo existente...';
+      StatusBar1.Panels[1].Text := Tr(siDeteniendo);
       FModbusThread.Stop;
       FModbusThread.Free;
       FModbusThread := nil;
@@ -196,14 +290,14 @@ begin
 
     if Assigned(FModbusThread) then
     begin
-      StatusBar1.Panels[1].Text := 'Deteniendo hilo existente...';
+      StatusBar1.Panels[1].Text := Tr(siDeteniendo);
       FModbusThread.Stop;
       FModbusThread.Free;
       FModbusThread := nil;
     end;
 
     try
-      // Obtener configuración
+      // Obtener configuraciï¿½n
       SerialConfig := GetSerialConfig;
       // Crear y configurar el hilo
       FModbusThread := TModbusSerialThread.Create(SerialConfig, SlaveIDs, mcReadHoldingRegisters, ReadInterval);
@@ -219,7 +313,7 @@ begin
     except
       on E: Exception do
       begin
-        StatusBar1.Panels[1].Text := 'Error iniciando comunicación Modbus: ' + E.Message;
+        StatusBar1.Panels[1].Text := Tr(siErrIniciando) + E.Message;
       end;
     end;
   end;
@@ -245,8 +339,6 @@ end;
 
 // Eventos del hilo Modbus
 procedure TfMain.OnModbusDataReceived(Sender: TObject; const Data: TModbusReadData);
-var
-  Msg: string;
 begin
   fWanptekDisplays[0].ModbusReadData := Data;
   fWanptekDisplays[1].ModbusReadData := Data;
@@ -255,42 +347,46 @@ end;
 
 procedure TfMain.OnModbusError(Sender: TObject; const ErrorMsg: string);
 begin
-  StatusBar1.Panels[1].Text := 'ERROR: ' + ErrorMsg;
+  StatusBar1.Panels[1].Text := Tr(siErrorPrefix) + ErrorMsg;
 end;
 
 procedure TfMain.OnModbusConnected(Sender: TObject);
 begin
-  actConectar.Caption := 'Desconectar Modbus';
+  actConectar.Caption := Tr(siDesconectar);
   actConectar.tag := 1;
-  StatusBar1.Panels[1].Text := 'Conectado al dispositivo Modbus';
+  StatusBar1.Panels[1].Text := Tr(siConectado);
   for var i := 0 to 2 do
     fWanptekDisplays[i].Enabled := true;
 end;
 
 procedure TfMain.OnModbusDisconnected(Sender: TObject);
 begin
-  actConectar.Caption := 'Conectar Modbus';
+  actConectar.Caption := Tr(siConectar);
   actConectar.tag := 0;
-  StatusBar1.Panels[1].Text := 'Desconectado del dispositivo Modbus';
+  StatusBar1.Panels[1].Text := Tr(siDesconectado);
   for var i := 0 to 2 do
     fWanptekDisplays[i].Enabled := False;
 end;
-{ ==== Implementación ==== }
+{ ==== Implementaciï¿½n ==== }
 
 function TBackendWanptek.ChannelCount: Integer;
 begin
-  // Devuelve el nº de canales que gestionas
+  // Devuelve el nï¿½ de canales que gestionas
   Result := 3;
 end;
 
 procedure TBackendWanptek.SetVoltage(AChannel: Integer; AVolts: Double);
 begin
-  fMain.fWanptekDisplays[AChannel].SetVoltage(AVolts);
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      fMain.fWanptekDisplays[AChannel].SetVoltage(AVolts);
+    end);
   // EJEMPLO A: llamando a tu UI (formularios embebidos)
   // TThread.Queue(nil,
   // procedure
   // begin
-  // // fWanptekDisplay[AChannel].SetVoltage(AVolts);  // <-- tu método real
+  // // fWanptekDisplay[AChannel].SetVoltage(AVolts);  // <-- tu mï¿½todo real
   // end);
 
   // EJEMPLO B: usando tu hilo Modbus directamente (sin UI)
@@ -299,34 +395,70 @@ end;
 
 procedure TBackendWanptek.SetCurrent(AChannel: Integer; AAmps: Double);
 begin
-  fMain.fWanptekDisplays[AChannel].SetCurrent(AAmps);
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      fMain.fWanptekDisplays[AChannel].SetCurrent(AAmps);
+    end);
 end;
 
 procedure TBackendWanptek.SetOutput(AChannel: Integer; AOn: Boolean);
 begin
-  fMain.fWanptekDisplays[AChannel].SetOutput(AOn);
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      fMain.fWanptekDisplays[AChannel].SetOutput(AOn);
+    end);
   // fWanptekDisplay[AChannel].SetOutput(AOn);
   // ModbusThread.WriteOutput(AChannel, AOn);
 end;
 
 function TBackendWanptek.GetVoltage(AChannel: Integer): Double;
+var
+  V: Double;
 begin
-  Result := fMain.fWanptekDisplays[AChannel].MeasVoltage;
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      V := fMain.fWanptekDisplays[AChannel].MeasVoltage;
+    end);
+  Result := V;
 end;
 
 function TBackendWanptek.GetCurrent(AChannel: Integer): Double;
+var
+  I: Double;
 begin
-  Result := fMain.fWanptekDisplays[AChannel].MeasCurrent;
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      I := fMain.fWanptekDisplays[AChannel].MeasCurrent;
+    end);
+  Result := I;
 end;
 
 function TBackendWanptek.GetPower(AChannel: Integer): Double;
+var
+  P: Double;
 begin
-  Result := fMain.fWanptekDisplays[AChannel].MeasPower;
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      P := fMain.fWanptekDisplays[AChannel].MeasPower;
+    end);
+  Result := P;
 end;
 
 function TBackendWanptek.GetOutput(AChannel: Integer): Boolean;
+var
+  B: Boolean;
 begin
-  Result := fMain.fWanptekDisplays[AChannel].GetOutput;
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      B := fMain.fWanptekDisplays[AChannel].GetOutput;
+    end);
+  Result := B;
 end;
 
 procedure TBackendWanptek.AllOff;
@@ -339,7 +471,7 @@ end;
 
 function TBackendWanptek.GetStatusText(AChannel: Integer): string;
 begin
-  // Devuelve info adicional (p. ej. 'CV', 'CC', alarmas…)
+  // Devuelve info adicional (p. ej. 'CV', 'CC', alarmasï¿½)
   Result := '';
 end;
 

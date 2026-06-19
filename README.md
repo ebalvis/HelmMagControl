@@ -22,6 +22,10 @@ La aplicación presenta una interfaz gráfica de usuario (GUI) que centraliza el
     * **Indicadores de Estado**: LEDs en la interfaz indican el estado de la fuente, como el modo de operación (**CV - Voltaje Constante** o **CC - Corriente Constante**), si la salida está activa (**Power**) o si se ha activado la protección OCP.
 <img width="705" height="741" alt="gui" src="https://github.com/user-attachments/assets/538794dc-a9fe-423e-9381-89c8bfad3ff2" />
 
+### **Idiomas**
+
+La aplicación está disponible en **español** e **inglés**. Un desplegable en la parte superior del panel de control permite cambiar el idioma **en caliente**, sin reiniciar: se traducen todas las etiquetas, los mensajes de estado y el propio título de la ventana. El idioma elegido se guarda en el registro de Windows y se recuerda entre sesiones; en el primer arranque se detecta automáticamente el idioma del sistema (con español como alternativa). El protocolo del servidor TCP permanece en inglés, por tratarse de una interfaz para clientes máquina.
+
 ### **Comunicación**
 
 * **Modbus en Hilo Dedicado**: Toda la comunicación Modbus se gestiona en un hilo de ejecución separado (`TModbusSerialThread`) para no bloquear la interfaz de usuario. Este hilo se encarga de leer periódicamente el estado de las fuentes y de enviar los comandos de escritura que el usuario genera al interactuar con la interfaz.

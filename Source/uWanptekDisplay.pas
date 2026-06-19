@@ -5,13 +5,13 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, JvExControls, JvSegmentedLEDDisplay, Vcl.Imaging.pngimage, Vcl.ExtCtrls, JvLED, Vcl.StdCtrls, ModbusSerialThread,
-  Vcl.WinXCtrls, JvDialButton, System.Actions, Vcl.ActnList, System.Math;
+  Vcl.WinXCtrls, JvDialButton, System.Actions, Vcl.ActnList, System.Math, uLang;
 
 type
   TVoltageTextLut = array [0 .. $0D] of string;
   TCurrentTextLut = array [0 .. $20] of string;
 
-  // Configuración del puerto serie
+  // Configuraciï¿½n del puerto serie
   TStatusRegister0 = record
     _VID: Byte; // IID(Position of the decimal point in the current data):
     _VPOD: bool; // VPOD(Position of the decimal point in the voltage data):
@@ -62,18 +62,22 @@ type
     fModbusThread: TModbusSerialThread;
     fFirstRead: Boolean;
     fUpdating: Boolean;
+    fAxis: Integer;
+    fMeasVoltage: double;
+    fMeasCurrent: double;
+    fMeasPower: double;
     procedure setModbusReadData(const Value: TModbusReadData);
 
     procedure WriteCmd;
     function getMeasCurrent: double;
     function getMeasVoltage: double;
     function getMeasPower: double;
-    procedure WriteCmdVI(voltaje, current: double);
     { Private declarations }
   public
     { Public declarations }
 
-    class function execute(slaveID: Byte; title: string): TfWanptekDisplay;
+    class function execute(slaveID: Byte; axis: Integer): TfWanptekDisplay;
+    procedure ApplyLanguage;
     procedure setCurrent(current: double);
     procedure setVoltage(Voltage: double);
     procedure SetOutput(Value: Boolean);
@@ -130,31 +134,39 @@ implementation
 {$R *.dfm}
 { TfWanptekDisplay }
 
-class function TfWanptekDisplay.execute(slaveID: Byte; title: string): TfWanptekDisplay;
+class function TfWanptekDisplay.execute(slaveID: Byte; axis: Integer): TfWanptekDisplay;
 begin
   result := TfWanptekDisplay.create(nil);
   with result do
   begin
-    Label1.Caption := title;
+    fAxis := axis;
     fSlaveID := slaveID;
     fModbusThread := ModbusThread;
     fFirstRead := true;
+    ApplyLanguage;
   end;
+end;
+
+procedure TfWanptekDisplay.ApplyLanguage;
+begin
+  Label1.Caption := Tr(TStrId(Ord(siBobinaX) + fAxis));
+  Label2.Caption := Tr(siVoltage);
+  Label3.Caption := Tr(siCurrent);
 end;
 
 function TfWanptekDisplay.getMeasCurrent: double;
 begin
-  result := dspCurrent.text.ToDouble;
+  result := fMeasCurrent;
 end;
 
 function TfWanptekDisplay.getMeasVoltage: double;
 begin
-  result := dspVoltaje.text.ToDouble;
+  result := fMeasVoltage;
 end;
 
 function TfWanptekDisplay.getMeasPower: double;
 begin
-  result := dspPower.text.ToDouble;
+  result := fMeasPower;
 end;
 
 procedure TfWanptekDisplay.Timer1Timer(Sender: TObject);
@@ -165,7 +177,6 @@ end;
 
 procedure TfWanptekDisplay.setModbusReadData(const Value: TModbusReadData);
 var
-  data: word;
   aux: String;
 begin
   if Value.slaveID = fSlaveID then
@@ -191,16 +202,19 @@ begin
       ledOCP.status := fStatusRegister0._OS;
       if fStatusRegister0._PS then
       begin
-        dspVoltaje.text := FormatFloat('00.00', Value.Values[2] / 100);
-        dspCurrent.text := FormatFloat('00.00', Value.Values[3] / 100);
-        dspPower.text := FormatFloat('000.0', Value.Values[2] * Value.Values[3] / 10000);
+        fMeasVoltage := Value.Values[2] / 100;
+        fMeasCurrent := Value.Values[3] / 100;
+        fMeasPower := Value.Values[2] * Value.Values[3] / 10000;
       end
       else
       begin
-        dspVoltaje.text := FormatFloat('00.00', Value.Values[4] / 100);
-        dspCurrent.text := FormatFloat('00.00', Value.Values[5] / 100);
-        dspPower.text := '000,0';
+        fMeasVoltage := Value.Values[4] / 100;
+        fMeasCurrent := Value.Values[5] / 100;
+        fMeasPower := 0;
       end;
+      dspVoltaje.text := FormatFloat('00.00', fMeasVoltage);
+      dspCurrent.text := FormatFloat('00.00', fMeasCurrent);
+      dspPower.text := FormatFloat('000.0', fMeasPower);
       if fFirstRead then
       begin
         fFirstRead := false;
@@ -246,13 +260,6 @@ begin
   var
   dataReg := ifthen(swOutput.state = tssOn, (1 shl 8), 0) + ifthen(swOCP.state = tssOn, (1 shl 9), 0);
   fModbusThread.AddWriteCommand(mcWriteMultipleRegisters, fSlaveID, 0, [dataReg, dialVoltaje.position * 10, dialCurrent.position * 10])
-end;
-
-procedure TfWanptekDisplay.WriteCmdVI(voltaje, current: double);
-begin
-  var
-  dataReg := ifthen(swOutput.state = tssOn, (1 shl 8), 0) + ifthen(swOCP.state = tssOn, (1 shl 9), 0);
-  fModbusThread.AddWriteCommand(mcWriteMultipleRegisters, fSlaveID, 0, [dataReg, round(voltaje * 10), round(current * 10)])
 end;
 
 procedure TfWanptekDisplay.dialCurrentMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);

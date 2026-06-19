@@ -3,14 +3,14 @@ unit ModbusSerialThread;
 interface
 
 uses
-  Classes, SysUtils, Windows, SyncObjs, Generics.Collections, System.Math;
+  Classes, SysUtils, Windows, SyncObjs, Generics.Collections, System.Math, uLang;
 
 type
   // Tipos de comando Modbus
   TModbusCommand = (mcReadCoils, mcReadDiscreteInputs, mcReadHoldingRegisters, mcReadInputRegisters, mcWriteSingleCoil, mcWriteSingleRegister,
     mcWriteMultipleCoils, mcWriteMultipleRegisters);
 
-  // Configuración del puerto serie
+  // Configuraciï¿½n del puerto serie
   TSerialConfig = record
     Port: string;
     BaudRate: DWORD;
@@ -20,7 +20,7 @@ type
     Timeout: DWORD;
   end;
 
-  // Estructura para comandos de escritura asíncrona
+  // Estructura para comandos de escritura asï¿½ncrona
   TModbusWriteCommand = record
     Command: TModbusCommand;
     SlaveID: Byte;
@@ -31,7 +31,7 @@ type
     BitValues: TArray<Boolean>;
   end;
 
-  // Estructura para datos leídos
+  // Estructura para datos leï¿½dos
   TModbusReadData = record
     SlaveID: Byte;
     Address: Word;
@@ -81,7 +81,7 @@ type
     function CalculateCRC(const Data: TBytes): Word;
     procedure ProcessWriteQueue;
     function WriteToSerial(const Data: TBytes): Boolean;
-    // MEJORA: Nueva función optimizada
+    // MEJORA: Nueva funciï¿½n optimizada
     function ReadFromSerialOptimized(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
     procedure FlushSerialBuffers;
     // MEJORA: Calcular tiempo entre caracteres
@@ -169,7 +169,7 @@ var
   CharsPerSecond: Double;
   TimePerChar: Double;
 begin
-  // Bits por carácter = data bits + start bit + stop bits + parity bit (si existe)
+  // Bits por carï¿½cter = data bits + start bit + stop bits + parity bit (si existe)
   BitsPerChar := FSerialConfig.DataBits + 1 + FSerialConfig.StopBits;
   if FSerialConfig.Parity <> 'N' then
     Inc(BitsPerChar);
@@ -177,10 +177,10 @@ begin
   CharsPerSecond := FSerialConfig.BaudRate / BitsPerChar;
   TimePerChar := 1000.0 / CharsPerSecond; // en milisegundos
 
-  // Tiempo de 3.5 caracteres (estándar Modbus RTU)
+  // Tiempo de 3.5 caracteres (estï¿½ndar Modbus RTU)
   Result := Round(TimePerChar * 3.5);
 
-  // Mínimo 2ms, máximo 20ms
+  // Mï¿½nimo 2ms, mï¿½ximo 20ms
   if Result < 2 then
     Result := 2
   else if Result > 20 then
@@ -209,7 +209,7 @@ begin
     aux := aux + FSlaveIDs[i];
 
   if aux = 0 then
-    raise Exception.Create('No hay direcciones modbus definidas.');
+    raise Exception.Create(Tr(siErrNoAddr));
 
   while not Terminated do
   begin
@@ -246,14 +246,14 @@ begin
         end
         else
         begin
-          FLastErrorMsg := 'Error en lectura periódica: ' + ReadData.ErrorMessage;
+          FLastErrorMsg := Tr(siErrLectura) + ReadData.ErrorMessage;
           Synchronize(SyncError);
         end;
 
         LastReadTime := GetTickCount;
       end;
 
-      // MEJORA: Pausa más corta
+      // MEJORA: Pausa mï¿½s corta
       if FStopEvent.WaitFor(5) = wrSignaled then
         Break;
 
@@ -264,7 +264,7 @@ begin
         FConnected := False;
         Synchronize(SyncDisconnected);
 
-        FLastErrorMsg := 'Excepción en hilo Modbus: ' + E.Message;
+        FLastErrorMsg := Tr(siErrExcepHilo) + E.Message;
         Synchronize(SyncError);
 
         if FStopEvent.WaitFor(2000) = wrSignaled then
@@ -289,14 +289,14 @@ begin
 
     if not Result then
     begin
-      FLastErrorMsg := 'No se pudo abrir el puerto ' + FSerialConfig.Port + '. Error: ' + IntToStr(GetLastError);
+      FLastErrorMsg := Tr(siErrNoPudoAbrir) + FSerialConfig.Port + '. Error: ' + IntToStr(GetLastError);
       Synchronize(SyncError);
     end;
 
   except
     on E: Exception do
     begin
-      FLastErrorMsg := 'Error al abrir puerto serie: ' + E.Message;
+      FLastErrorMsg := Tr(siErrAbrirPuerto) + E.Message;
       Synchronize(SyncError);
     end;
   end;
@@ -364,18 +364,18 @@ begin
     if not SetCommState(FSerialHandle, DCB) then
       Exit;
 
-    // MEJORA CRÍTICA: Timeouts optimizados para Modbus RTU
+    // MEJORA CRï¿½TICA: Timeouts optimizados para Modbus RTU
     FillChar(Timeouts, SizeOf(Timeouts), 0);
 
-    // ReadIntervalTimeout: tiempo máximo entre bytes
-    // Usar tiempo de 1.5 caracteres para detectar fin de trama rápidamente
+    // ReadIntervalTimeout: tiempo mï¿½ximo entre bytes
+    // Usar tiempo de 1.5 caracteres para detectar fin de trama rï¿½pidamente
     Timeouts.ReadIntervalTimeout := Max(10, CalculateCharTime div 2);
 
     // ReadTotalTimeoutMultiplier y Constant para timeout total
     Timeouts.ReadTotalTimeoutMultiplier := 0;
     Timeouts.ReadTotalTimeoutConstant := Max(100, FSerialConfig.Timeout);
 
-    // Timeouts de escritura más cortos
+    // Timeouts de escritura mï¿½s cortos
     Timeouts.WriteTotalTimeoutMultiplier := 0;
     Timeouts.WriteTotalTimeoutConstant := 100;
 
@@ -384,7 +384,7 @@ begin
   except
     on E: Exception do
     begin
-      FLastErrorMsg := 'Error configurando puerto serie: ' + E.Message;
+      FLastErrorMsg := Tr(siErrConfig) + E.Message;
       Synchronize(SyncError);
     end;
   end;
@@ -423,13 +423,13 @@ begin
   except
     on E: Exception do
     begin
-      FLastErrorMsg := 'Error escribiendo al puerto serie: ' + E.Message;
+      FLastErrorMsg := Tr(siErrEscribiendo) + E.Message;
       Synchronize(SyncError);
     end;
   end;
 end;
 
-// MEJORA CRÍTICA: Nueva función de lectura optimizada
+// MEJORA CRï¿½TICA: Nueva funciï¿½n de lectura optimizada
 function TModbusSerialThread.ReadFromSerialOptimized(var Buffer: TBytes; ExpectedLength: Integer): Boolean;
 var
   BytesRead, TotalRead: DWORD;
@@ -446,7 +446,7 @@ begin
   if FSerialHandle = INVALID_HANDLE_VALUE then
     Exit;
 
-  // Tiempo entre caracteres (1.5 caracteres según Modbus RTU)
+  // Tiempo entre caracteres (1.5 caracteres segï¿½n Modbus RTU)
   InterCharTimeout := Max(5, CalculateCharTime div 2);
 
   try
@@ -455,13 +455,13 @@ begin
     begin
       BytesRead := 0;
 
-      // Leer lo que esté disponible
+      // Leer lo que estï¿½ disponible
       if ReadFile(FSerialHandle, FReadBuffer[TotalRead], SizeOf(FReadBuffer) - TotalRead, BytesRead, nil) and (BytesRead > 0) then
       begin
         TotalRead := TotalRead + BytesRead;
         LastByteTime := GetTickCount;
 
-        // Si hemos leído suficiente, salir
+        // Si hemos leï¿½do suficiente, salir
         if (ExpectedLength > 0) and (TotalRead >= DWORD(ExpectedLength)) then
           Break;
       end
@@ -472,7 +472,7 @@ begin
         if (TotalRead > 0) and ((GetTickCount - LastByteTime) >= InterCharTimeout) then
           Break;
 
-        // Pequeña pausa para no saturar CPU
+        // Pequeï¿½a pausa para no saturar CPU
         Sleep(1);
       end;
     end;
@@ -487,7 +487,7 @@ begin
   except
     on E: Exception do
     begin
-      FLastErrorMsg := 'Error leyendo del puerto serie: ' + E.Message;
+      FLastErrorMsg := Tr(siErrLeyendo) + E.Message;
       Synchronize(SyncError);
     end;
   end;
@@ -530,20 +530,20 @@ begin
     // Enviar comando
     if not WriteToSerial(Frame) then
     begin
-      Result.ErrorMessage := 'Error enviando comando';
+      Result.ErrorMessage := Tr(siErrEnviando);
       Exit;
     end;
 
-    // MEJORA: Usar función de lectura optimizada
+    // MEJORA: Usar funciï¿½n de lectura optimizada
     if not ReadFromSerialOptimized(Response, ExpectedResponseLength) then
     begin
-      Result.ErrorMessage := 'Timeout esperando respuesta';
+      Result.ErrorMessage := Tr(siErrTimeout);
       Exit;
     end;
 
     if Length(Response) < 3 then
     begin
-      Result.ErrorMessage := 'Respuesta muy corta';
+      Result.ErrorMessage := Tr(siErrRespCorta);
       Exit;
     end;
 
@@ -555,7 +555,7 @@ begin
 
       if CRCReceived <> CRCCalculated then
       begin
-        Result.ErrorMessage := Format('Error de CRC (Calc: $%4.4x, Recv: $%4.4x)', [CRCCalculated, CRCReceived]);
+        Result.ErrorMessage := Format(Tr(siErrCRC), [CRCCalculated, CRCReceived]);
         Exit;
       end;
     end;
@@ -614,7 +614,7 @@ begin
     if not WriteToSerial(Frame) then
       Exit;
 
-    // MEJORA: Usar función optimizada
+    // MEJORA: Usar funciï¿½n optimizada
     if not ReadFromSerialOptimized(Response, 8) then
       Exit;
 
@@ -624,7 +624,7 @@ begin
   except
     on E: Exception do
     begin
-      FLastErrorMsg := 'Error en escritura: ' + E.Message;
+      FLastErrorMsg := Tr(siErrEscritura) + E.Message;
       Synchronize(SyncError);
     end;
   end;
@@ -765,13 +765,13 @@ begin
 
   if Length(Response) < 3 then
   begin
-    Result.ErrorMessage := 'Respuesta muy corta';
+    Result.ErrorMessage := Tr(siErrRespCorta);
     Exit;
   end;
 
   if (Response[1] and $80) = $80 then
   begin
-    Result.ErrorMessage := 'Error Modbus código: ' + IntToStr(Response[2]);
+    Result.ErrorMessage := Tr(siErrModbusCode) + IntToStr(Response[2]);
     Exit;
   end;
 
@@ -780,7 +780,7 @@ begin
       begin
         if Length(Response) < 5 then
         begin
-          Result.ErrorMessage := 'Respuesta incompleta para registros';
+          Result.ErrorMessage := Tr(siErrRespIncReg);
           Exit;
         end;
 
@@ -794,11 +794,10 @@ begin
       begin
         if Length(Response) < 4 then
         begin
-          Result.ErrorMessage := 'Respuesta incompleta para coils';
+          Result.ErrorMessage := Tr(siErrRespIncCoils);
           Exit;
         end;
 
-        ByteCount := Response[2];
         SetLength(Result.BitValues, Result.Count);
         for i := 0 to Result.Count - 1 do
           Result.BitValues[i] := (Response[3 + (i div 8)] and (1 shl (i mod 8))) <> 0;
@@ -840,7 +839,7 @@ begin
       FWriteQueueLock.Leave;
       try
         WriteModbusCommand(WriteCmd);
-        // MEJORA: Pausa más corta
+        // MEJORA: Pausa mï¿½s corta
         Sleep(5);
       finally
         FWriteQueueLock.Enter;
@@ -851,7 +850,7 @@ begin
   end;
 end;
 
-// Métodos para agregar comandos de escritura
+// Mï¿½todos para agregar comandos de escritura
 procedure TModbusSerialThread.AddWriteCommand(Command: TModbusCommand; SlaveID: Byte; Address: Word; Value: Word);
 var
   WriteCmd: TModbusWriteCommand;
@@ -924,7 +923,7 @@ begin
   end;
 end;
 
-// Métodos de sincronización
+// Mï¿½todos de sincronizaciï¿½n
 procedure TModbusSerialThread.SyncDataReceived;
 begin
   if Assigned(FOnDataReceived) then
