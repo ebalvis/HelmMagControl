@@ -16,6 +16,7 @@ type
   private
     FThread: TModbusThread;
     FPanels: array [0 .. 2] of TWanptekPanel;
+    FSlaveIDs: array [0 .. 2] of Byte;
     // config
     cmbPort, cmbBaud, cmbParity, cmbStop, cmbLang: TComboBox;
     edData, edX, edY, edZ, edInterval, edSrvPort: TEdit;
@@ -72,19 +73,19 @@ var
 begin
   Position := poScreenCenter;
   BorderStyle := bsSingle;
-  ClientWidth := 760;
-  ClientHeight := 500;
+  ClientWidth := 772;
+  ClientHeight := 548;
 
   // --- columna izquierda: 3 paneles de canal ---
   for ax := 0 to 2 do
   begin
     FPanels[ax] := TWanptekPanel.CreatePanel(Self, ax, 1, CoilTitle(ax));
     FPanels[ax].Parent := Self;
-    FPanels[ax].SetBounds(8, 8 + ax * 156, 470, 150);
+    FPanels[ax].SetBounds(8, 8 + ax * 176, 482, 170);
   end;
 
   // --- columna derecha: configuracion ---
-  cx := 490;
+  cx := 502;
 
   cmbLang := C(Self, cx + 60, 8, 120, [LanguageName(lnEs), LanguageName(lnEn)]);
   lblLang := L(Self, cx, 11, 56, '');
@@ -210,6 +211,11 @@ begin
   slaves[0] := StrToIntDef(edX.Text, 1);
   slaves[1] := StrToIntDef(edY.Text, 2);
   slaves[2] := StrToIntDef(edZ.Text, 3);
+  for ax := 0 to 2 do
+  begin
+    FSlaveIDs[ax] := slaves[ax];
+    FPanels[ax].SetSlaveID(slaves[ax]);
+  end;
 
   FThread := TModbusThread.Create(cfg, slaves, StrToIntDef(edInterval.Text, 1000));
   FThread.OnData := @OnData;
@@ -226,7 +232,7 @@ var
   ax: Integer;
 begin
   for ax := 0 to 2 do
-    if FPanels[ax].SlaveID = SlaveID then
+    if FSlaveIDs[ax] = SlaveID then
       FPanels[ax].UpdateRegs(Regs);
 end;
 

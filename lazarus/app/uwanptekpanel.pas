@@ -29,6 +29,7 @@ type
   public
     constructor CreatePanel(AOwner: TComponent; Axis: Integer; SlaveID: Byte; const Title: string);
     procedure SetThread(AThread: TModbusThread);
+    procedure SetSlaveID(S: Byte);
     procedure SetTitle(const S: string);
     procedure UpdateRegs(const Regs: TMbWords);
     property SlaveID: Byte read FSlaveID;
@@ -44,74 +45,90 @@ const
 
 constructor TWanptekPanel.CreatePanel(AOwner: TComponent; Axis: Integer; SlaveID: Byte; const Title: string);
 
-  function MkSeg(x: Integer; col: TColor): TSeg7Display;
+  function MkSeg(y: Integer; col: TColor): TSeg7Display;
   begin
     Result := TSeg7Display.Create(Self);
     Result.Parent := Self;
-    Result.SetBounds(x, 22, 118, 44);
+    Result.SetBounds(12, y, 212, 42);
     Result.OnColor := col;
+    Result.BackColor := TColor($0C0C0C);
     Result.Text := '00.00';
   end;
 
-  function MkUnit(x: Integer; const u: string): TLabel;
+  function MkUnit(y: Integer; const u: string): TLabel;
   begin
     Result := TLabel.Create(Self);
     Result.Parent := Self;
-    Result.SetBounds(x, 38, 16, 16);
+    Result.SetBounds(230, y + 12, 18, 18);
     Result.Caption := u;
-    Result.Font.Color := clWhite;
+    Result.Font.Color := clSilver;
     Result.Font.Style := [fsBold];
+  end;
+
+  function MkSetLabel(x, y: Integer; const cap: string): TLabel;
+  begin
+    Result := TLabel.Create(Self);
+    Result.Parent := Self;
+    Result.SetBounds(x, y, 110, 16);
+    Result.Caption := cap;
+    Result.Font.Color := clSilver;
   end;
 
 begin
   inherited Create(AOwner);
   FAxis := Axis;
   FSlaveID := SlaveID;
-  BevelOuter := bvLowered;
-  Color := TColor($303030);
-  Width := 470;
-  Height := 150;
+  BevelOuter := bvNone;
+  BevelInner := bvRaised;
+  Color := TColor($2A2A2A);
+  Width := 482;
+  Height := 170;
 
   lblTitle := TLabel.Create(Self);
   lblTitle.Parent := Self;
-  lblTitle.SetBounds(8, 4, 240, 16);
+  lblTitle.SetBounds(12, 6, 300, 18);
   lblTitle.Caption := Title;
-  lblTitle.Font.Color := clWhite;
+  lblTitle.Font.Color := TColor($30C0F0);
   lblTitle.Font.Style := [fsBold];
 
-  segV := MkSeg(8, TColor($2030F0));   MkUnit(128, 'V');
-  segI := MkSeg(150, TColor($2030F0)); MkUnit(270, 'A');
-  segP := MkSeg(292, TColor($30C0F0)); MkUnit(412, 'W');
+  // Displays apilados (V / A / W), como una fuente real
+  segV := MkSeg(28, TColor($2030F0));  MkUnit(28, 'V');
+  segI := MkSeg(74, TColor($2030F0));  MkUnit(74, 'A');
+  segP := MkSeg(120, TColor($1090F0)); MkUnit(120, 'W');
 
-  shPWR := MakeLed(286, 70, 'PWR');
-  shCV  := MakeLed(286, 90, 'CV');
-  shCC  := MakeLed(360, 70, 'CC');
-  shOCP := MakeLed(360, 90, 'OCP');
+  // Columna de LEDs de estado
+  shPWR := MakeLed(264, 30, 'PWR');
+  shCV  := MakeLed(264, 56, 'CV');
+  shCC  := MakeLed(264, 82, 'CC');
+  shOCP := MakeLed(264, 108, 'OCP');
 
+  // Diales (setpoints) y conmutadores
+  MkSetLabel(338, 26, 'V set');
   tbV := TTrackBar.Create(Self);
   tbV.Parent := Self;
-  tbV.SetBounds(8, 70, 180, 28);
+  tbV.SetBounds(336, 42, 138, 28);
   tbV.Min := 0; tbV.Max := 3000; tbV.Position := 0;
   tbV.OnChange := @CtrlChange;
 
+  MkSetLabel(338, 74, 'I set');
   tbI := TTrackBar.Create(Self);
   tbI.Parent := Self;
-  tbI.SetBounds(8, 100, 180, 28);
+  tbI.SetBounds(336, 90, 138, 28);
   tbI.Min := 0; tbI.Max := 500; tbI.Position := 0;
   tbI.OnChange := @CtrlChange;
 
   chkOut := TCheckBox.Create(Self);
   chkOut.Parent := Self;
-  chkOut.SetBounds(200, 124, 80, 20);
+  chkOut.SetBounds(338, 124, 70, 22);
   chkOut.Caption := 'Output';
-  chkOut.Font.Color := clWhite;
+  chkOut.Font.Color := clSilver;
   chkOut.OnChange := @CtrlChange;
 
   chkOCP := TCheckBox.Create(Self);
   chkOCP.Parent := Self;
-  chkOCP.SetBounds(286, 124, 80, 20);
+  chkOCP.SetBounds(410, 124, 64, 22);
   chkOCP.Caption := 'OCP';
-  chkOCP.Font.Color := clWhite;
+  chkOCP.Font.Color := clSilver;
   chkOCP.OnChange := @CtrlChange;
 end;
 
@@ -134,6 +151,11 @@ end;
 procedure TWanptekPanel.SetThread(AThread: TModbusThread);
 begin
   FThread := AThread;
+end;
+
+procedure TWanptekPanel.SetSlaveID(S: Byte);
+begin
+  FSlaveID := S;
 end;
 
 procedure TWanptekPanel.SetTitle(const S: string);
