@@ -85,12 +85,12 @@ begin
   Position := poScreenCenter;
   BorderStyle := bsSingle;
   ClientWidth := 768;
-  ClientHeight := 548;
+  ClientHeight := 800;
 
   // --- columna izquierda: 3 paneles de canal en un scrollbox (como el Delphi) ---
   sb := TScrollBox.Create(Self);
   sb.Parent := Self;
-  sb.SetBounds(8, 8, 502, 532);
+  sb.SetBounds(8, 8, 502, 770);
   sb.HorzScrollBar.Visible := False;
   for ax := 0 to 2 do
   begin
@@ -113,7 +113,7 @@ begin
 
   gbSerial := TGroupBox.Create(Self);
   gbSerial.Parent := Self;
-  gbSerial.SetBounds(cx, 74, 240, 172);
+  gbSerial.SetBounds(cx, 74, 240, 178);
   lblPort   := L(gbSerial, 12, 22, 70, '');
   cmbPort   := C(gbSerial, 90, 19, 130, ['COM1','COM2','COM3','COM4','COM5','COM6','COM7']);
   lblBaud   := L(gbSerial, 12, 50, 70, '');
@@ -128,21 +128,21 @@ begin
 
   gbAddr := TGroupBox.Create(Self);
   gbAddr.Parent := Self;
-  gbAddr.SetBounds(cx, 252, 240, 110);
+  gbAddr.SetBounds(cx, 258, 240, 122);
   lblX := L(gbAddr, 12, 22, 60, '');  edX := E(gbAddr, 90, 19, 60, '1');
   lblY := L(gbAddr, 12, 50, 60, '');  edY := E(gbAddr, 90, 47, 60, '2');
   lblZ := L(gbAddr, 12, 78, 60, '');  edZ := E(gbAddr, 90, 75, 60, '3');
 
   gbParams := TGroupBox.Create(Self);
   gbParams.Parent := Self;
-  gbParams.SetBounds(cx, 368, 240, 54);
+  gbParams.SetBounds(cx, 386, 240, 66);
   lblInterval := L(gbParams, 12, 22, 60, '');
   edInterval  := E(gbParams, 90, 19, 80, '1000');
   lblMs := L(gbParams, 176, 22, 30, 'ms');
 
   gbServer := TGroupBox.Create(Self);
   gbServer.Parent := Self;
-  gbServer.SetBounds(cx, 428, 240, 54);
+  gbServer.SetBounds(cx, 458, 240, 66);
   lblSrvPort := L(gbServer, 12, 22, 60, '');
   edSrvPort  := E(gbServer, 90, 19, 80, '4444');
 
