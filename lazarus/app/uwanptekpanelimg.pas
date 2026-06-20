@@ -9,7 +9,7 @@ unit uwanptekpanelimg;
 interface
 
 uses
-  Classes, SysUtils, Math, Controls, Graphics, ExtCtrls, StdCtrls,
+  Classes, SysUtils, Math, Controls, Graphics, ExtCtrls,
   useg7, uknob, utoggle, umbthread, umodbus_core;
 
 const
@@ -26,7 +26,7 @@ type
     FBmp: TBitmap;
     FTitle: string;
     segV, segI, segP: TSeg7Display;
-    shOCPled, shCC, shPWR, shCV: TShape;
+    shTX, shOCPled, shCC, shPWR, shCV: TShape;
     knV, knI: TKnob;
     swOut, swOCP: TToggle;
     function MkLed(x, y: Integer): TShape;
@@ -119,18 +119,6 @@ var
     Result.OnChange := @CtrlChange;
   end;
 
-  procedure MkLbl(x, y, w: Integer; const cap: string);
-  var
-    lbl: TLabel;
-  begin
-    lbl := TLabel.Create(Self);
-    lbl.Parent := Self;
-    lbl.SetBounds(x, y + TITLEBAR, w, 16);
-    lbl.Caption := cap;
-    lbl.Font.Color := clSilver;
-    lbl.Alignment := taCenter;
-  end;
-
 begin
   inherited Create(AOwner);
   FAxis := Axis;
@@ -139,10 +127,10 @@ begin
   Color := TColor($202830);
   LoadBackground;
   Width := 482;
-  Height := 232 + TITLEBAR + 84; // + franja de control inferior
+  Height := 232 + TITLEBAR;
 
   if Assigned(FBmp) then
-    dispCol := FBmp.Canvas.Pixels[300, 150] // zona negra del display (img nativa 611x391)
+    dispCol := FBmp.Canvas.Pixels[270, 230] // zona negra del display (img nativa 926x475)
   else
     dispCol := clBlack;
 
@@ -151,21 +139,18 @@ begin
   segI := MkSeg(103, TColor($2030F0));
   segP := MkSeg(148, TColor($1090F0));
 
-  // LEDs centrados sobre los circulos reales del bisel (detectados en la imagen)
-  shOCPled := MkLed(57, 67);   // O.C.P  -> centro (66,76)
-  shCC     := MkLed(57, 119);  // C.C    -> centro (66,128)
-  shPWR    := MkLed(408, 68);  // Output -> centro (417,77)
-  shCV     := MkLed(406, 120); // C.V    -> centro (415,129)
+  // LEDs en las posiciones originales del Delphi (centrados sobre los circulos)
+  shTX     := MkLed(10, 21);
+  shOCPled := MkLed(94, 71);
+  shCC     := MkLed(94, 117);
+  shPWR    := MkLed(324, 71);
+  shCV     := MkLed(324, 117);
 
-  // --- franja de control inferior (debajo del frontal): diales e interruptores ---
-  MkLbl(40, 238, 66, 'V set');
-  knV := MkKnob(46, 256, 3000);
-  MkLbl(130, 238, 66, 'I set');
-  knI := MkKnob(136, 256, 500);
-  MkLbl(228, 238, 64, 'Output');
-  swOut := MkToggle(235, 258);
-  MkLbl(316, 238, 64, 'OCP');
-  swOCP := MkToggle(323, 258);
+  // interruptores y diales (posiciones Delphi)
+  swOCP := MkToggle(77, 48);
+  swOut := MkToggle(317, 48);
+  knV := MkKnob(401, 84, 3000);
+  knI := MkKnob(400, 156, 500);
 end;
 
 destructor TWanptekPanelImg.Destroy;
