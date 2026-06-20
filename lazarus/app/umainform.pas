@@ -96,7 +96,7 @@ begin
   begin
     FPanels[ax] := TWanptekPanelImg.CreatePanel(Self, ax, 1, CoilTitle(ax));
     FPanels[ax].Parent := sb;
-    FPanels[ax].SetBounds(0, ax * 258, 482, 252);
+    FPanels[ax].SetBounds(0, ax * 342, 482, 336);
   end;
 
   // --- columna derecha: configuracion ---
