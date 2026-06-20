@@ -46,4 +46,16 @@ Una de las características más avanzadas del proyecto es su capacidad de ser c
 
 En resumen, el proyecto **BHC2000** es una herramienta completa y robusta que permite tanto el control manual detallado como la automatización remota de tres fuentes de alimentación para la generación precisa de campos magnéticos, lo que lo hace ideal para entornos de laboratorio e investigación.
 
+### **Versión multiplataforma (Lazarus / Free Pascal)**
+
+Además de la versión original en Delphi (carpeta `Source/`), el proyecto incluye una **reimplementación multiplataforma en Lazarus / Free Pascal** (carpeta `lazarus/`), que permite compilar y ejecutar en **Windows, Linux y macOS** sin licencia comercial, manteniendo paridad funcional con la versión Delphi en Windows.
+
+* **`lazarus/app/`** — aplicación completa equivalente a BHC2000: los tres canales sobre el frontal real Wanptek KPS3020D, configuración del puerto serie, selector de idioma ES/EN, hilo Modbus y servidor TCP del mismo protocolo de texto.
+* **`lazarus/poc/`** — núcleo portable (protocolo Modbus, capa serie `ISerialTransport`, servidor TCP con `ssockets`) y pruebas de concepto *headless*.
+* **`lazarus/gui/`** — el widget de display de 7 segmentos dibujado a mano.
+
+Los componentes JVCL del original (displays LED, diales, interruptores) se sustituyen por **widgets propios dibujados sobre `Canvas`** (`TSeg7Display`, `TKnob`, `TToggle`), válidos en cualquier *widgetset* de la LCL. La comunicación serie se aísla tras la interfaz `ISerialTransport`, con back-ends para Windows (WinAPI) y POSIX (termios).
+
+Compilación: `lazbuild lazarus/app/bhc.lpi` (requiere Lazarus / FPC).
+
 

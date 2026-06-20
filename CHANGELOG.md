@@ -4,6 +4,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [0.4.0] - 2026-06-20
+
+### Añadido
+- **Versión multiplataforma en Lazarus / Free Pascal** (carpeta `lazarus/`), con paridad funcional con la versión Delphi en Windows:
+  - Aplicación completa con los 3 canales sobre el frontal real Wanptek KPS3020D, configuración del puerto serie, direcciones X/Y/Z, intervalo y puerto del servidor.
+  - Internacionalización **Español / Inglés** en caliente (UTF-8 nativo de la LCL).
+  - Núcleo Modbus RTU (CRC, tramas, parseo) y capa serie abstracta `ISerialTransport` con back-ends Windows (WinAPI) y POSIX (termios).
+  - Servidor TCP del mismo protocolo de texto (`PING`, `SET`, `GET`, `OUT`, `STATUS`, `READ ALL`, `ALL OFF`) en un hilo aparte, con *marshalling* al hilo principal.
+  - Widgets propios que reemplazan a los componentes JVCL: display de 7 segmentos (`TSeg7Display`), dial rotatorio (`TKnob`) e interruptor (`TToggle`).
+
+### Corregido (Delphi y Lazarus)
+- Endurecida la captura de errores de conexión y del servidor TCP:
+  - El reintento de conexión sin puerto ya no congela la interfaz.
+  - Ciclo de vida correcto del servidor TCP (arranque idempotente, parada al desconectar).
+  - El servidor TCP de Lazarus ya no se cuelga al pararse con un cliente conectado e inactivo (`SO_RCVTIMEO`).
+  - Un comando TCP que lance una excepción ya no tumba el servidor.
+  - Estado de conexión honesto («Conectando…») y errores de *bind* del servidor visibles en la barra de estado.
+  - Cola de escritura del hilo Modbus acotada (deduplicada por slave/registro).
+  - El caso degenerado de todos los Slave ID a 0 se notifica y sale limpio en vez de morir en silencio.
+
 ## [0.3.0] - 2026-06-19
 
 ### Añadido
