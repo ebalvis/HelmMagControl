@@ -82,6 +82,10 @@ end;
 
 procedure TTcpServerController.Start(APort: Integer);
 begin
+  // Idempotente: si ya estaba activo, lo paramos antes de (re)arrancar, para
+  // poder cambiar de puerto y evitar errores al reconectar.
+  if IdTCPServer.Active then
+    IdTCPServer.Active := False;
   IdTCPServer.DefaultPort := APort;
   IdTCPServer.Active := True;
 end;

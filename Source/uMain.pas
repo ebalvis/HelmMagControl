@@ -282,6 +282,8 @@ begin
       FModbusThread.Stop;
       FModbusThread.Free;
       FModbusThread := nil;
+      if Assigned(fServer) then
+        fServer.Stop;
       OnModbusDisconnected(nil);
     end;
   end

@@ -154,7 +154,7 @@ procedure TModbusThread.Execute;
 var
   regs: TMbWords;
   lastRead: QWord;
-  i, sum: Integer;
+  i, sum, waitK: Integer;
 begin
   sum := 0;
   for i := 0 to High(FSlaves) do sum := sum + FSlaves[i];
@@ -181,7 +181,13 @@ begin
       begin
         FEvMsg := FSerial.LastError;
         Synchronize(@SyncErr);
-        Sleep(2000);
+        // espera ~2 s antes de reintentar, pero interrumpible: si llega
+        // Terminate (Desconectar/cerrar) sale en <=100 ms, sin congelar la UI.
+        for waitK := 1 to 20 do
+        begin
+          if Terminated then Break;
+          Sleep(100);
+        end;
         Continue;
       end;
     end;

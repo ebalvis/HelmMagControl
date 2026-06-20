@@ -294,7 +294,12 @@ end;
 
 procedure TMainForm.DoProcess;
 begin
-  FCmdOut := ParseCmd(FCmdIn);
+  try
+    FCmdOut := ParseCmd(FCmdIn);
+  except
+    on E: Exception do
+      FCmdOut := 'ERROR ' + E.ClassName + ': ' + E.Message;
+  end;
 end;
 
 function TMainForm.ParseCmd(const Cmd: string): string;
