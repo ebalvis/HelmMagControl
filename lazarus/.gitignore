@@ -13,3 +13,7 @@ backup/
 link*.res
 ppas.*
 poc_out.txt
+# Lazarus
+*.lps
+*.res
+lib/
