@@ -9,13 +9,13 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls,
-  ulang, umbthread, uwanptekpanel, userial, umodbus_core, utcpserver;
+  ulang, umbthread, uwanptekpanelimg, userial, umodbus_core, utcpserver;
 
 type
   TMainForm = class(TForm)
   private
     FThread: TModbusThread;
-    FPanels: array [0 .. 2] of TWanptekPanel;
+    FPanels: array [0 .. 2] of TWanptekPanelImg;
     FSlaveIDs: array [0 .. 2] of Byte;
     FTcp: TTcpServer;
     FFS: TFormatSettings;
@@ -78,24 +78,29 @@ end;
 procedure TMainForm.BuildUI;
 var
   ax, cx: Integer;
+  sb: TScrollBox;
 begin
   FFS := DefaultFormatSettings;
   FFS.DecimalSeparator := '.'; // protocolo TCP: punto invariante
   Position := poScreenCenter;
   BorderStyle := bsSingle;
-  ClientWidth := 772;
+  ClientWidth := 768;
   ClientHeight := 548;
 
-  // --- columna izquierda: 3 paneles de canal ---
+  // --- columna izquierda: 3 paneles de canal en un scrollbox (como el Delphi) ---
+  sb := TScrollBox.Create(Self);
+  sb.Parent := Self;
+  sb.SetBounds(8, 8, 502, 532);
+  sb.HorzScrollBar.Visible := False;
   for ax := 0 to 2 do
   begin
-    FPanels[ax] := TWanptekPanel.CreatePanel(Self, ax, 1, CoilTitle(ax));
-    FPanels[ax].Parent := Self;
-    FPanels[ax].SetBounds(8, 8 + ax * 176, 482, 170);
+    FPanels[ax] := TWanptekPanelImg.CreatePanel(Self, ax, 1, CoilTitle(ax));
+    FPanels[ax].Parent := sb;
+    FPanels[ax].SetBounds(0, ax * 258, 482, 252);
   end;
 
   // --- columna derecha: configuracion ---
-  cx := 502;
+  cx := 522;
 
   cmbLang := C(Self, cx + 60, 8, 120, [LanguageName(lnEs), LanguageName(lnEn)]);
   lblLang := L(Self, cx, 11, 56, '');
