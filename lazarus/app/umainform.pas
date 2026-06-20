@@ -9,7 +9,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls,
-  ulang, umbthread, uwanptekpanel, userial, umodbus_core;
+  ulang, umbthread, uwanptekpanel, userial, umodbus_core, utcpserver;
 
 type
   TMainForm = class(TForm)
@@ -17,6 +17,9 @@ type
     FThread: TModbusThread;
     FPanels: array [0 .. 2] of TWanptekPanel;
     FSlaveIDs: array [0 .. 2] of Byte;
+    FTcp: TTcpServer;
+    FFS: TFormatSettings;
+    FCmdIn, FCmdOut: string;
     // config
     cmbPort, cmbBaud, cmbParity, cmbStop, cmbLang: TComboBox;
     edData, edX, edY, edZ, edInterval, edSrvPort: TEdit;
@@ -33,6 +36,11 @@ type
     procedure OnDisc(Sender: TObject; const Msg: string);
     procedure OnErr(Sender: TObject; const Msg: string);
     procedure DoClose(Sender: TObject; var CloseAction: TCloseAction);
+    // servidor TCP: ProcessCommand corre en el hilo del servidor y marshala
+    // a DoProcess (hilo principal); ParseCmd accede a los paneles.
+    function ProcessCommand(const Cmd: string): string;
+    procedure DoProcess;
+    function ParseCmd(const Cmd: string): string;
   public
     procedure BuildUI;
   end;
@@ -71,6 +79,8 @@ procedure TMainForm.BuildUI;
 var
   ax, cx: Integer;
 begin
+  FFS := DefaultFormatSettings;
+  FFS.DecimalSeparator := '.'; // protocolo TCP: punto invariante
   Position := poScreenCenter;
   BorderStyle := bsSingle;
   ClientWidth := 772;
@@ -187,6 +197,7 @@ var
 begin
   if Assigned(FThread) then
   begin
+    if Assigned(FTcp) then begin FTcp.Stop; FreeAndNil(FTcp); end;
     FThread.Terminate;
     FThread.WaitFor;
     FreeAndNil(FThread);
@@ -224,6 +235,10 @@ begin
   FThread.OnError := @OnErr;
   for ax := 0 to 2 do
     FPanels[ax].SetThread(FThread);
+
+  FTcp := TTcpServer.Create(StrToIntDef(edSrvPort.Text, 4444), @ProcessCommand);
+  FTcp.Start;
+
   ApplyLanguage;
 end;
 
@@ -253,6 +268,7 @@ end;
 
 procedure TMainForm.DoClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
+  if Assigned(FTcp) then begin FTcp.Stop; FreeAndNil(FTcp); end;
   if Assigned(FThread) then
   begin
     FThread.Terminate;
@@ -261,6 +277,108 @@ begin
   end;
   CloseAction := caFree;
   Application.Terminate;
+end;
+
+function TMainForm.ProcessCommand(const Cmd: string): string;
+begin
+  // corre en el hilo del servidor TCP -> marshala el procesado al hilo principal
+  FCmdIn := Cmd;
+  TThread.Synchronize(nil, @DoProcess);
+  Result := FCmdOut;
+end;
+
+procedure TMainForm.DoProcess;
+begin
+  FCmdOut := ParseCmd(FCmdIn);
+end;
+
+function TMainForm.ParseCmd(const Cmd: string): string;
+
+  function ChOK(x: Integer): Boolean;
+  begin Result := (x >= 1) and (x <= 3); end;
+
+  function ChanNum(const tok: string): Integer;
+  begin
+    if Length(tok) >= 2 then Result := StrToIntDef(Copy(tok, 2, Length(tok) - 1), 0)
+    else Result := 0;
+  end;
+
+  function OnOff(b: Boolean): string;
+  begin if b then Result := 'ON' else Result := 'OFF'; end;
+
+var
+  t: array of string;
+  cur: string;
+  i, n: Integer;
+  letter: Char;
+  val: Double;
+begin
+  if Cmd = '' then Exit('ERROR EmptyCommand');
+  if SameText(Cmd, 'PING') then Exit('OK PONG');
+  if SameText(Cmd, 'ALL OFF') then
+  begin
+    for n := 0 to 2 do FPanels[n].RemoteSetOutput(False);
+    Exit('OK ALL OFF');
+  end;
+  if SameText(Cmd, 'READ ALL') then
+  begin
+    Result := 'OK';
+    for n := 1 to 3 do
+      Result := Result + Format(' CH%d V=%.6f I=%.6f OUT=%s',
+        [n, FPanels[n-1].MeasV, FPanels[n-1].MeasI, OnOff(FPanels[n-1].OutputOn)], FFS);
+    Exit;
+  end;
+
+  // tokenizar por espacios
+  SetLength(t, 0); cur := '';
+  for i := 1 to Length(Cmd) do
+    if Cmd[i] = ' ' then
+    begin
+      if cur <> '' then begin SetLength(t, Length(t) + 1); t[High(t)] := cur; cur := ''; end;
+    end
+    else cur := cur + Cmd[i];
+  if cur <> '' then begin SetLength(t, Length(t) + 1); t[High(t)] := cur; end;
+
+  if (Length(t) = 3) and SameText(t[0], 'SET') and (Length(t[1]) >= 2) then
+  begin
+    letter := UpCase(t[1][1]); n := ChanNum(t[1]);
+    if not ChOK(n) then Exit('ERROR InvalidChannel');
+    if not TryStrToFloat(t[2], val, FFS) then Exit('ERROR BadValue');
+    case letter of
+      'V': begin FPanels[n-1].RemoteSetV(val); Exit(Format('OK SET V%d=%.6f', [n, val], FFS)); end;
+      'I': begin FPanels[n-1].RemoteSetI(val); Exit(Format('OK SET I%d=%.6f', [n, val], FFS)); end;
+    end;
+    Exit('ERROR UnknownCommand');
+  end;
+
+  if (Length(t) = 3) and SameText(t[0], 'OUT') then
+  begin
+    n := StrToIntDef(t[1], 0);
+    if not ChOK(n) then Exit('ERROR InvalidChannel');
+    FPanels[n-1].RemoteSetOutput(SameText(t[2], 'ON'));
+    Exit(Format('OK OUT %d %s', [n, OnOff(SameText(t[2], 'ON'))]));
+  end;
+
+  if (Length(t) = 2) and SameText(t[0], 'GET') and (Length(t[1]) >= 2) then
+  begin
+    letter := UpCase(t[1][1]); n := ChanNum(t[1]);
+    if not ChOK(n) then Exit('ERROR InvalidChannel');
+    case letter of
+      'V': Exit(Format('OK V%d=%.6f', [n, FPanels[n-1].MeasV], FFS));
+      'I': Exit(Format('OK I%d=%.6f', [n, FPanels[n-1].MeasI], FFS));
+      'P': Exit(Format('OK P%d=%.6f', [n, FPanels[n-1].MeasP], FFS));
+    end;
+    Exit('ERROR UnknownCommand');
+  end;
+
+  if (Length(t) = 2) and SameText(t[0], 'STATUS') then
+  begin
+    n := StrToIntDef(t[1], 0);
+    if not ChOK(n) then Exit('ERROR InvalidChannel');
+    Exit(Format('OK STATUS %d %s', [n, OnOff(FPanels[n-1].OutputOn)]));
+  end;
+
+  Result := 'ERROR UnknownCommand';
 end;
 
 end.

@@ -8,7 +8,7 @@ unit uwanptekpanel;
 interface
 
 uses
-  Classes, SysUtils, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls,
+  Classes, SysUtils, Math, Controls, Graphics, StdCtrls, ExtCtrls, ComCtrls,
   useg7, umbthread, umodbus_core;
 
 type
@@ -18,6 +18,7 @@ type
     FSlaveID: Byte;
     FThread: TModbusThread;
     FUpdating: Boolean;
+    FMeasV, FMeasI, FMeasP: Double;
     lblTitle: TLabel;
     segV, segI, segP: TSeg7Display;
     shPWR, shCV, shCC, shOCP: TShape;
@@ -32,6 +33,14 @@ type
     procedure SetSlaveID(S: Byte);
     procedure SetTitle(const S: string);
     procedure UpdateRegs(const Regs: TMbWords);
+    // acceso remoto (servidor TCP) — invocar en el hilo principal
+    function MeasV: Double;
+    function MeasI: Double;
+    function MeasP: Double;
+    function OutputOn: Boolean;
+    procedure RemoteSetV(val: Double);
+    procedure RemoteSetI(val: Double);
+    procedure RemoteSetOutput(b: Boolean);
     property SlaveID: Byte read FSlaveID;
   end;
 
@@ -208,6 +217,7 @@ begin
       p := 0;
     end;
 
+    FMeasV := v; FMeasI := i; FMeasP := p;
     segV.Text := FormatFloat('00.00', v);
     segI.Text := FormatFloat('00.00', i);
     segP.Text := FormatFloat('000.0', p);
@@ -223,6 +233,50 @@ begin
   finally
     FUpdating := False;
   end;
+end;
+
+function TWanptekPanel.MeasV: Double;
+begin
+  Result := FMeasV;
+end;
+
+function TWanptekPanel.MeasI: Double;
+begin
+  Result := FMeasI;
+end;
+
+function TWanptekPanel.MeasP: Double;
+begin
+  Result := FMeasP;
+end;
+
+function TWanptekPanel.OutputOn: Boolean;
+begin
+  Result := chkOut.Checked;
+end;
+
+procedure TWanptekPanel.RemoteSetV(val: Double);
+begin
+  FUpdating := True;
+  tbV.Position := EnsureRange(Round(val * 100), tbV.Min, tbV.Max);
+  FUpdating := False;
+  SendSetpoints;
+end;
+
+procedure TWanptekPanel.RemoteSetI(val: Double);
+begin
+  FUpdating := True;
+  tbI.Position := EnsureRange(Round(val * 100), tbI.Min, tbI.Max);
+  FUpdating := False;
+  SendSetpoints;
+end;
+
+procedure TWanptekPanel.RemoteSetOutput(b: Boolean);
+begin
+  FUpdating := True;
+  chkOut.Checked := b;
+  FUpdating := False;
+  SendSetpoints;
 end;
 
 end.
