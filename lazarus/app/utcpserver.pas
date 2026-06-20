@@ -16,6 +16,7 @@ uses
 
 type
   TCmdHandler = function(const Cmd: string): string of object;
+  TMsgEvent = procedure(const Msg: string) of object;
 
   TTcpServer = class
   private
@@ -24,6 +25,7 @@ type
     FServer: TInetServer;
     FThread: TThread;
     FStopping: Boolean;
+    FOnError: TMsgEvent;
     procedure DoConnect(Sender: TObject; Data: TSocketStream);
     function ReadLine(S: TSocketStream; out line: string): Boolean;
   public
@@ -31,6 +33,7 @@ type
     destructor Destroy; override;
     procedure Start;
     procedure Stop;
+    property OnError: TMsgEvent read FOnError write FOnError;
   end;
 
 implementation
@@ -45,25 +48,40 @@ const
 type
   TAcceptThread = class(TThread)
   private
-    FSrv: TInetServer;
+    FOwner: TTcpServer;
+    FErr: string;
+    procedure SyncErr;
   protected
     procedure Execute; override;
   public
-    constructor Create(ASrv: TInetServer);
+    constructor Create(AOwner: TTcpServer);
   end;
 
-constructor TAcceptThread.Create(ASrv: TInetServer);
+constructor TAcceptThread.Create(AOwner: TTcpServer);
 begin
-  FSrv := ASrv;
+  FOwner := AOwner;
   inherited Create(False);
+end;
+
+procedure TAcceptThread.SyncErr;
+begin
+  if Assigned(FOwner.FOnError) then
+    FOwner.FOnError(FErr);
 end;
 
 procedure TAcceptThread.Execute;
 begin
   try
-    FSrv.StartAccepting;
+    FOwner.FServer.StartAccepting;
   except
-    // StopAccepting cierra el socket y aborta el accept: salida normal.
+    on E: Exception do
+      // Si estamos parando, la excepcion es por StopAccepting (normal). Si no,
+      // es un fallo real (p.ej. bind: puerto ocupado) y se notifica.
+      if not FOwner.FStopping then
+      begin
+        FErr := E.Message;
+        Synchronize(@SyncErr);
+      end;
   end;
 end;
 
@@ -113,7 +131,7 @@ begin
   FStopping := False;
   FServer := TInetServer.Create(FPort);
   FServer.OnConnect := @DoConnect;
-  FThread := TAcceptThread.Create(FServer);
+  FThread := TAcceptThread.Create(Self);
 end;
 
 procedure TTcpServer.Stop;

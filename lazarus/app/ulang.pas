@@ -13,7 +13,7 @@ type
     siAppTitle, siGbSerial, siLblPort, siLblBaud, siLblData, siLblParity, siLblStop,
     siGbAddr, siLblX, siLblY, siLblZ, siGbServer, siLblSrvPort, siGbParams,
     siLblInterval, siLblLang, siConnect, siDisconnect, siConnected, siDisconnected,
-    siCoilX, siCoilY, siCoilZ
+    siCoilX, siCoilY, siCoilZ, siConnecting
   );
 
 procedure SetLanguage(ALang: TLanguage);
@@ -41,7 +41,8 @@ const
       'Paridad:', 'Stop Bits:', ' Dirección equipos ', 'Eje X:', 'Eje Y:', 'Eje Z:',
       ' Puerto servidor', 'Puerto', ' Parámetros ', 'Intervalo', 'Idioma:',
       'Conectar Modbus', 'Desconectar Modbus', 'Conectado al dispositivo Modbus',
-      'Desconectado del dispositivo Modbus', 'BOBINA EJE X', 'BOBINA EJE Y', 'BOBINA EJE Z'
+      'Desconectado del dispositivo Modbus', 'BOBINA EJE X', 'BOBINA EJE Y', 'BOBINA EJE Z',
+      'Conectando...'
     ),
     // English
     (
@@ -50,7 +51,8 @@ const
       'Parity:', 'Stop bits:', ' Device addresses ', 'X axis:', 'Y axis:', 'Z axis:',
       ' Server port', 'Port', ' Parameters ', 'Interval', 'Language:',
       'Connect Modbus', 'Disconnect Modbus', 'Connected to Modbus device',
-      'Disconnected from Modbus device', 'X AXIS COIL', 'Y AXIS COIL', 'Z AXIS COIL'
+      'Disconnected from Modbus device', 'X AXIS COIL', 'Y AXIS COIL', 'Z AXIS COIL',
+      'Connecting...'
     )
   );
 

@@ -35,6 +35,7 @@ type
     procedure OnConn(Sender: TObject; const Msg: string);
     procedure OnDisc(Sender: TObject; const Msg: string);
     procedure OnErr(Sender: TObject; const Msg: string);
+    procedure OnTcpError(const Msg: string);
     procedure DoClose(Sender: TObject; var CloseAction: TCloseAction);
     // servidor TCP: ProcessCommand corre en el hilo del servidor y marshala
     // a DoProcess (hilo principal); ParseCmd accede a los paneles.
@@ -242,8 +243,10 @@ begin
     FPanels[ax].SetThread(FThread);
 
   FTcp := TTcpServer.Create(StrToIntDef(edSrvPort.Text, 4444), @ProcessCommand);
+  FTcp.OnError := @OnTcpError;
   FTcp.Start;
 
+  status.SimpleText := Tr(siConnecting); // estado real hasta que OnConn confirme
   ApplyLanguage;
 end;
 
@@ -269,6 +272,11 @@ end;
 procedure TMainForm.OnErr(Sender: TObject; const Msg: string);
 begin
   status.SimpleText := 'ERROR: ' + Msg;
+end;
+
+procedure TMainForm.OnTcpError(const Msg: string);
+begin
+  status.SimpleText := 'TCP: ' + Msg;
 end;
 
 procedure TMainForm.DoClose(Sender: TObject; var CloseAction: TCloseAction);

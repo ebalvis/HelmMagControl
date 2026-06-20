@@ -209,7 +209,11 @@ begin
     aux := aux + FSlaveIDs[i];
 
   if aux = 0 then
-    raise Exception.Create(Tr(siErrNoAddr));
+  begin
+    FLastErrorMsg := Tr(siErrNoAddr);
+    Synchronize(SyncError);
+    Exit;
+  end;
 
   while not Terminated do
   begin

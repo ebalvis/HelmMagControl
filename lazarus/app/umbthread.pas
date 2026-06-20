@@ -90,6 +90,15 @@ begin
   for i := 0 to High(Vals) do it.Vals[i] := Vals[i];
   EnterCriticalSection(FLock);
   try
+    // dedup: si ya hay una escritura pendiente para el mismo slave/registro,
+    // la reemplazamos (gana el ultimo setpoint) -> la cola no crece sin limite
+    // aunque se muevan los knobs estando desconectado.
+    for i := 0 to High(FQueue) do
+      if (FQueue[i].SlaveID = SlaveID) and (FQueue[i].Addr = Addr) then
+      begin
+        FQueue[i] := it;
+        Exit;
+      end;
     SetLength(FQueue, Length(FQueue) + 1);
     FQueue[High(FQueue)] := it;
   finally
