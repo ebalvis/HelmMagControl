@@ -1,61 +1,59 @@
 # HelmMagControl
-**BHC2000**, es una aplicación de escritorio diseñada para controlar tres fuentes de alimentación de la marca Wanptek a través del protocolo **Modbus RTU**. El objetivo principal del proyecto es generar un campo magnético controlado en tres ejes (X, Y, Z) mediante bobinas de Helmholtz, donde cada eje es alimentado por una fuente de alimentación independiente.
+**BHC2000** is a desktop application designed to control three Wanptek power supplies through the **Modbus RTU** protocol. The main goal of the project is to generate a controlled magnetic field on three axes (X, Y, Z) using Helmholtz coils, where each axis is driven by an independent power supply.
 
-A continuación se detalla la funcionalidad externa del proyecto, describiendo lo que un usuario puede hacer con la aplicación.
+The following describes the external functionality of the project — what a user can do with the application.
 
-### **Interfaz Gráfica y Control Manual**
+### **Graphical Interface and Manual Control**
 
-La aplicación presenta una interfaz gráfica de usuario (GUI) que centraliza el control y la monitorización de las tres fuentes de alimentación.
+The application provides a graphical user interface (GUI) that centralizes the control and monitoring of the three power supplies.
 
-* **Panel de Control Principal**:
-    * **Configuración de la Conexión**: Antes de iniciar la comunicación, el usuario debe configurar los parámetros del puerto serie, incluyendo el **puerto COM**, la **velocidad (baud rate)**, los **bits de datos**, la **paridad** y los **bits de parada**.
-    * **Direcciones Modbus**: Se deben especificar las direcciones Modbus (Slave ID) para cada una de las tres fuentes, asociadas a los ejes **X, Y y Z**.
-    * **Conexión**: Un botón de **"Conectar"** inicia la comunicación con las fuentes de alimentación a través del puerto serie configurado.
-    * **Servidor TCP**: La aplicación puede actuar como un servidor TCP para control remoto. El usuario puede especificar el puerto en el que el servidor escuchará las conexiones entrantes.
+* **Main Control Panel**:
+    * **Connection Settings**: Before starting communication, the user configures the serial port parameters: **COM port**, **baud rate**, **data bits**, **parity** and **stop bits**.
+    * **Modbus Addresses**: The Modbus addresses (Slave IDs) for each of the three supplies must be specified, associated with axes **X, Y and Z**.
+    * **Connection**: A **"Connect"** button starts communication with the power supplies over the configured serial port.
+    * **TCP Server**: The application can act as a TCP server for remote control. The user can specify the port the server listens on for incoming connections.
 
-* **Visualización por Canal (Ejes X, Y, Z)**:
-    La interfaz muestra tres paneles idénticos, cada uno representando una fuente de alimentación para una bobina (Eje X, Eje Y, Eje Z). Cada panel, de la clase `TfWanptekDisplay`, simula el frontal de una fuente Wanptek y ofrece la siguiente funcionalidad:
-    * **Pantallas LED**: Muestra en tiempo real los valores de **voltaje, corriente y potencia** de cada fuente.
-    * **Ajuste de Voltaje y Corriente**: El usuario puede ajustar los valores de voltaje y corriente deseados mediante **diales giratorios**.
-    * **Control de Salida**: Un interruptor **(On/Off)** permite habilitar o deshabilitar la salida de cada fuente de forma individual.
-    * **Protección contra Sobrecorriente (OCP)**: Se incluye un interruptor para activar o desactivar la función OCP.
-    * **Indicadores de Estado**: LEDs en la interfaz indican el estado de la fuente, como el modo de operación (**CV - Voltaje Constante** o **CC - Corriente Constante**), si la salida está activa (**Power**) o si se ha activado la protección OCP.
+* **Per-Channel View (X, Y, Z axes)**:
+    The interface shows three identical panels, each representing a power supply for one coil (X axis, Y axis, Z axis). Each panel, of class `TfWanptekDisplay`, mimics the front panel of a Wanptek supply and provides:
+    * **LED Displays**: Real-time **voltage, current and power** readings for each supply.
+    * **Voltage and Current Setting**: The user can adjust the target voltage and current values with **rotary dials**.
+    * **Output Control**: An **(On/Off)** switch enables or disables each supply's output individually.
+    * **Over-Current Protection (OCP)**: A switch enables or disables the OCP function.
+    * **Status Indicators**: LEDs show the supply state, such as the operating mode (**CV — Constant Voltage** or **CC — Constant Current**), whether the output is active (**Power**), or whether OCP has tripped.
 <img width="705" height="741" alt="gui" src="https://github.com/user-attachments/assets/538794dc-a9fe-423e-9381-89c8bfad3ff2" />
 
-### **Idiomas**
+### **Languages**
 
-La aplicación está disponible en **español** e **inglés**. Un desplegable en la parte superior del panel de control permite cambiar el idioma **en caliente**, sin reiniciar: se traducen todas las etiquetas, los mensajes de estado y el propio título de la ventana. El idioma elegido se guarda en el registro de Windows y se recuerda entre sesiones; en el primer arranque se detecta automáticamente el idioma del sistema (con español como alternativa). El protocolo del servidor TCP permanece en inglés, por tratarse de una interfaz para clientes máquina.
+The application is available in **Spanish** and **English**. A dropdown at the top of the control panel switches the language **on the fly**, without restarting: all labels, status messages and the window title itself are translated. The chosen language is saved in the Windows registry and remembered across sessions; on first launch the system language is detected automatically (falling back to Spanish). The TCP server protocol stays in English, as it is a machine-facing interface.
 
-### **Comunicación**
+### **Communication**
 
-* **Modbus en Hilo Dedicado**: Toda la comunicación Modbus se gestiona en un hilo de ejecución separado (`TModbusSerialThread`) para no bloquear la interfaz de usuario. Este hilo se encarga de leer periódicamente el estado de las fuentes y de enviar los comandos de escritura que el usuario genera al interactuar con la interfaz.
+* **Modbus on a Dedicated Thread**: All Modbus communication is handled on a separate execution thread (`TModbusSerialThread`) so as not to block the user interface. This thread periodically reads the supplies' status and sends the write commands the user generates by interacting with the interface.
 
-### **Funcionalidad de Control Remoto (Servidor TCP)**
+### **Remote Control (TCP Server)**
 
-Una de las características más avanzadas del proyecto es su capacidad de ser controlado de forma remota a través de una conexión TCP. Esto permite automatizar experimentos o integrar el sistema de generación de campo magnético en un sistema de control más grande. El servidor implementa un protocolo basado en comandos de texto simples.
+One of the most advanced features of the project is its ability to be controlled remotely over a TCP connection. This allows experiments to be automated or the magnetic-field generation system to be integrated into a larger control system. The server implements a protocol based on simple text commands.
 
-* **Comandos Soportados**:
-    * `PING`: Para verificar la conexión.
-    * `ALL OFF`: Apaga todas las salidas de las fuentes.
-    * `READ ALL`: Devuelve el estado completo de las tres fuentes.
-    * `SET V<n> <valor>`: Fija el voltaje del canal `n`.
-    * `SET I<n> <valor>`: Fija la corriente del canal `n`.
-    * `OUT <n> ON|OFF`: Enciende o apaga la salida del canal `n`.
-    * `GET V<n>`, `GET I<n>`, `GET P<n>`: Obtiene el voltaje, la corriente o la potencia de un canal específico.
-    * `STATUS <n>`: Consulta el estado de un canal.
+* **Supported Commands**:
+    * `PING`: Check the connection.
+    * `ALL OFF`: Turn off all supply outputs.
+    * `READ ALL`: Return the full status of the three supplies.
+    * `SET V<n> <value>`: Set the voltage of channel `n`.
+    * `SET I<n> <value>`: Set the current of channel `n`.
+    * `OUT <n> ON|OFF`: Turn the output of channel `n` on or off.
+    * `GET V<n>`, `GET I<n>`, `GET P<n>`: Get the voltage, current or power of a specific channel.
+    * `STATUS <n>`: Query the status of a channel.
 
-En resumen, el proyecto **BHC2000** es una herramienta completa y robusta que permite tanto el control manual detallado como la automatización remota de tres fuentes de alimentación para la generación precisa de campos magnéticos, lo que lo hace ideal para entornos de laboratorio e investigación.
+In short, **BHC2000** is a complete and robust tool that allows both detailed manual control and remote automation of three power supplies for the precise generation of magnetic fields, making it ideal for laboratory and research environments.
 
-### **Versión multiplataforma (Lazarus / Free Pascal)**
+### **Cross-platform version (Lazarus / Free Pascal)**
 
-Además de la versión original en Delphi (carpeta `Source/`), el proyecto incluye una **reimplementación multiplataforma en Lazarus / Free Pascal** (carpeta `lazarus/`), que permite compilar y ejecutar en **Windows, Linux y macOS** sin licencia comercial, manteniendo paridad funcional con la versión Delphi en Windows.
+In addition to the original Delphi version (`Source/` folder), the project includes a **cross-platform reimplementation in Lazarus / Free Pascal** (`lazarus/` folder), which compiles and runs on **Windows, Linux and macOS** without a commercial license, keeping functional parity with the Delphi version on Windows.
 
-* **`lazarus/app/`** — aplicación completa equivalente a BHC2000: los tres canales sobre el frontal real Wanptek KPS3020D, configuración del puerto serie, selector de idioma ES/EN, hilo Modbus y servidor TCP del mismo protocolo de texto.
-* **`lazarus/poc/`** — núcleo portable (protocolo Modbus, capa serie `ISerialTransport`, servidor TCP con `ssockets`) y pruebas de concepto *headless*.
-* **`lazarus/gui/`** — el widget de display de 7 segmentos dibujado a mano.
+* **`lazarus/app/`** — full application equivalent to BHC2000: the three channels over the real Wanptek KPS3020D front panel, serial port configuration, ES/EN language selector, Modbus thread and TCP server with the same text protocol.
+* **`lazarus/poc/`** — portable core (Modbus protocol, `ISerialTransport` serial layer, TCP server with `ssockets`) and *headless* proof-of-concept tests.
+* **`lazarus/gui/`** — the hand-drawn 7-segment display widget.
 
-Los componentes JVCL del original (displays LED, diales, interruptores) se sustituyen por **widgets propios dibujados sobre `Canvas`** (`TSeg7Display`, `TKnob`, `TToggle`), válidos en cualquier *widgetset* de la LCL. La comunicación serie se aísla tras la interfaz `ISerialTransport`, con back-ends para Windows (WinAPI) y POSIX (termios).
+The original JVCL components (LED displays, dials, switches) are replaced by **custom widgets drawn on `Canvas`** (`TSeg7Display`, `TKnob`, `TToggle`), valid on any LCL *widgetset*. Serial communication is isolated behind the `ISerialTransport` interface, with back-ends for Windows (WinAPI) and POSIX (termios).
 
-Compilación: `lazbuild lazarus/app/bhc.lpi` (requiere Lazarus / FPC).
-
-
+Build: `lazbuild lazarus/app/bhc.lpi` (requires Lazarus / FPC).
